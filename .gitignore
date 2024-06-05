@@ -4,6 +4,7 @@ module1.py
 
 # credentials and tokens
 /auths/*/*.json
+/auths/*/tokens/*/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
