@@ -4,7 +4,7 @@ module1.py
 
 # credentials and tokens
 /auths/*/*.json
-/auths/*/tokens/*/
+/auths/*/tokens/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -143,3 +143,4 @@ dmypy.json
 /.vs/playpaws/v17
 /.vs/playpaws
 /.vs
+/auths/spotify/tokens/1235496003.json
