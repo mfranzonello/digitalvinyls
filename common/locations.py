@@ -7,3 +7,7 @@ SPOTIFY_AUTH_URL = 'https://accounts.spotify.com'
 
 # redirects and URIs
 SPOTIFY_REDIRECT='https://localhost:8888/callback'
+
+# sonos host
+SONOS_HOST = 'http://localhost'
+SONOS_PORT = '5005'

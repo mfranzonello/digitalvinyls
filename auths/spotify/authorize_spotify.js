@@ -174,7 +174,8 @@ app.get('/callback', function(req, res) {
             });
 
             // print output
-            //console.log("Access token: " + access_token)
+            console.log("Access token: " + access_token)
+            console.log("")
 	        console.log("Refresh token: " + refresh_token)
 
             // we can also pass the token to the browser to make requests from there

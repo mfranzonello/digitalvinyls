@@ -1,0 +1,27 @@
+﻿body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background-color: #222;
+}
+
+.coverflow {
+    display: flex;
+    overflow-x: scroll;
+    width: 80%;
+    height: 400px;
+    perspective: 1000px;
+}
+
+    .coverflow img {
+        width: 200px;
+        height: 200px;
+        margin: 0 10px;
+        transition: transform 0.5s ease;
+    }
+
+        .coverflow img:hover {
+            transform: scale(1.2);
+        }

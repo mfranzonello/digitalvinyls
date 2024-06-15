@@ -27,7 +27,12 @@ class Caller:
             response = self.methods[method](url=url, timeout=10, **kwargs)
             if response.ok:
                 content, jason = self.extract_json(response)
-
+                
+            else:
+                print(f'...call failed with status code {response.status_code} - {response.reason}')
+                print(f'URL: {response.url}')
+                print(f'{response.headers}')
+                
         except Exception as e:
             print(f'...call failed due to {e}.')
 

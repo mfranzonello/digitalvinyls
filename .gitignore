@@ -6,6 +6,10 @@ module1.py
 /auths/*/*.json
 /auths/*/tokens/*
 
+# JS nodes
+/auths/spotify/node_modules
+/auths/soundcloud/node_modules
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -143,4 +147,3 @@ dmypy.json
 /.vs/playpaws/v17
 /.vs/playpaws
 /.vs
-/auths/spotify/tokens/1235496003.json

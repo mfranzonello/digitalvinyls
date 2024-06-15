@@ -5,6 +5,8 @@ from os.path import dirname, realpath
 
 SPOTIFY_AUTHS_FOLDER = 'auths/spotify'
 SPOTIFY_TOKENS_FOLDER = f'{SPOTIFY_AUTHS_FOLDER}/tokens'
+SONOS_AUTHS_FOLDER = 'auths/sonos'
+SONOS_TOKENS_FOLDER = f'{SONOS_AUTHS_FOLDER}/tokens'
 STRUCTURE_FOLDER = 'jsons'
 
 def read_json(filepath, filename):
@@ -13,15 +15,20 @@ def read_json(filepath, filename):
         
     return json_dict
 
+def write_json(filepath, filename, json_dict):
+    with open(dirname(dirname(realpath(__file__))) + '/' + filepath + '/' + filename + '.json') as f:
+        json.dump(json_dict, f)
+
 structures = read_json(STRUCTURE_FOLDER, 'structure')
 
 SPOTIFY_USER_ID = structures['SPOTIFY_USER_ID']
 SPOTIFY_USERNAME = structures['SPOTIFY_USERNAME']
+SONOS_REDIRECT_URI = structures['SONOS_REDIRECT_URI']
+SPOTIFY_REDIRECT_URI = structures['SONOS_REDIRECT_URI']
+NEON_DB_NAME = structures['NEON_DB_NAME']
+NEON_USERNAME = structures['NEON_USERNAME']
+NEON_HOST = structures['NEON_HOST']
 
-def get_token(user_id):
-    token_info = read_json(SPOTIFY_TOKENS_FOLDER, user_id)
-    return token_info
-
-def get_scope():
-    scope = read_json(SPOTIFY_AUTHS_FOLDER, 'scopes')
+def get_scope(folder):
+    scope = read_json(folder, 'scopes')
     return ', '.join(scope)
