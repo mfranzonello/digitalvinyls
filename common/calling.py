@@ -1,12 +1,14 @@
 ''' Calling APIs, receiving JSONs and updating JSONs '''
 
 import requests
-import json
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 import time
 
-from pandas import isnull
-from pandas.api.types import is_numeric_dtype
+from common.words import Colors
+
+class NoResponse:
+    def __init__(self):
+        self.ok = False
 
 class Caller:
     methods = {'get': requests.get,
@@ -15,6 +17,9 @@ class Caller:
 
     def __init__(self):
         pass
+    
+    def no_response(self):
+        return NoResponse()
 
     def invoke_api(self, url, method='get', **kwargs):
         content = None
@@ -71,98 +76,46 @@ class Caller:
 
         return token_info
 
-class Recorder:
-    def __init__(self, database):
-        j_names = {'mail': 'checked',
-                   'reopen': 'reopens'}
-        self.jasons = {j: f'./jsons/{j_names[j]}.json' for j in j_names}
 
-        self.database = database
-
-    def get_time(self, item):
-        dt = self.database.get_update(item)
-
-        return dt
-
-    def set_time(self, item):
-        self.database.store_update(item, datetime.now())
-      
-    def get_reopens(self):
-        with open(self.jasons['reopen'], 'r+') as f:
-            reopens  = json.load(f)
-
-        return reopens
-
-    def set_reopens(self):
-        with open(self.jasons['reopen'], 'r+') as f:
-            f.seek(0)
-            json.dump({}, f)
-            f.truncate()
-
-class Quoter:
-    ''' changes input text to SQL compatible '''
+class Printer:
+    hashes = 20
+    tab_t = '\t'
     def __init__(self):
-        pass
-
-    def quotable(self, item):
-        ''' add SQL appropriate quotes to string variables '''
-        is_quote = not (self.numberable(item) or self.nullable(item))
-        return is_quote
-
-    def numberable(self, item):
-        ''' do not add quotes or cast information to numbers '''
-        is_number = (not self.nullable(item)) and is_numeric_dtype(type(item))
-        return is_number
-
-    def timable(self, item):
-        ''' add cast information to datetime values '''
-        is_time = isinstance(item, datetime)
-        return is_time
-
-    def datable(self, item):
-        ''' add cast information to date values '''
-        is_date = isinstance(item, date)
-        return is_date
-
-    def nullable(self, item):
-        ''' change to None for None, nan, etc '''
-        is_null = (not self.jsonable(item)) and (isnull(item) or (item == 'nan'))
-        return is_null
-
-    def jsonable(self, item):
-        ''' add cast information to lists and dicts as JSON '''
-        is_json = isinstance(item, (list, dict, set))
-        return is_json
-
-    def replace_for_sql(self, text):
-        ''' fix special characters '''
-        char = "'"
-        pct = '%'
-        for_sql = char + text.replace(char, char*2).replace(pct, pct*2).replace(pct*4, pct*2) + char
-        return for_sql
-
-    def put_quotes(self, item) -> str:
-        ''' put quotes around strings to account for special characters '''
-        if self.quotable(item):
-            if self.timable(item):
-                quoted = self.replace_for_sql(str(item)) + '::timestamp'
-            if self.datable(item):
-                quoted = self.replace_for_sql(str(item)) + '::date'
-            elif self.jsonable(item):
-                quoted = self.replace_for_sql(json.dumps(item)) + '::jsonb'
-            else:
-                quoted = self.replace_for_sql(str(item))
-        elif self.nullable(item):
-            quoted = 'NULL'
+        self.end = '\n'
+        self.under = 0
+        self.over = 0
+    
+    # Function to demonstrate a progress bar
+    def show_progress(self, current, total, message='completed', tabs=1):
+        # Print the progress bar without a newline
+        if total:
+            pct = current/total
+            pct_i = round(pct * 100)
+            pct_h = round(pct * self.hashes)
         else:
-            quoted = str(item)
+            pct = pct_h = pct_i = 0
+            
+        color = Colors.scale_color(pct, Colors.RED_RGB, Colors.GREEN_RGB, Colors.YELLOW_RGB)
 
-        return quoted
+        self.end = '' if pct < 1 else '\n' # only start new line at 100%
+        this_print = f'\r{self.tab_t*tabs}[{color}{pct_h * "#":<{self.hashes}}{Colors.END}] {pct_i}% {message}' # what is printing now
+        print_cover = f'{this_print:<{self.under + self.over + 2}}'
+        print(print_cover, end=self.end) # print and cover up if needed
+        if self.end != '\n' and len(print_cover) > len(this_print):
+            print((len(print_cover) - len(this_print)) * '\b', end=self.end) # back up over space
 
-    def load_json(self, string):
-        ''' convert string to list or dictionary '''
-        return json.loads(string)
-
-    def dump_json(self, data):
-        ''' convert list or dictionary to string '''
-        return json.dumps(data)
+        # reset marker
+        self.under = len(this_print)
+        self.over = 0
+        
+    def add_text(self, text, space=' '):
+        if self.end == '\n':
+            print(text) # print as normal
+        else:
+            print(self.over * '\b', end=self.end) # back up
+            ptext = space + text # get new text
+            print(ptext, end=self.end) # place new text
+            self.over = len(ptext) # keep note of old text
+            
+    def display_status(self, response):
+        self.add_text(f'{response.status_code} {response.reason}')

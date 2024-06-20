@@ -1,4 +1,6 @@
-from main import set_up_database, set_up_user
+''' Play music '''
+
+from setup import set_up_database, set_up_user
 from music.hardware import Sonoser
 
 def set_up_speakers():

@@ -1,7 +1,10 @@
+''' Streaming music sources and libaries '''
+
 from math import ceil
 from datetime import datetime
 from base64 import b64encode, urlsafe_b64encode
 from time import sleep
+from urllib import parse
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -9,33 +12,33 @@ import six
 from spotipy import Spotify, SpotifyClientCredentials
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import MemoryCacheHandler
-from pandas import DataFrame, concat
+from pandas import DataFrame
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
-from common.calling import Caller
+from common.calling import Caller, Printer
+from common.words import Texter
 from common.secret import get_secret, get_token, save_token
 from common.locations import SPOTIFY_AUTH_URL #, SPOTIFY_REDIRECT_URI
 from common.structure import SPOTIFY_TOKENS_FOLDER, SPOTIFY_AUTHS_FOLDER, SPOTIFY_REDIRECT_URI, get_scope
+from library.stripping import RemoveWords
 
 class DSP:
-    def __init__(self):
-        pass
-
-    def get_albums(self):
+    def get_albums(self, **kwargs):
         return None, None, None
 
-    def get_favorites(self):
+    def get_favorites(self, **kwargs):
         return None, None, None
     
-    def get_playlists(self):
+    def get_playlists(self, **kwargs):
         return None, None, None
 
-class Service(Caller, DSP):
+class Service(Printer, Caller):
     def __init__(self):
-        super().__init__()
+        Printer.__init__(self)
+        Caller.__init__(self)
         
     def connect(self):
         pass
@@ -43,11 +46,13 @@ class Service(Caller, DSP):
     def disconnect(self):
         pass
 
-class Spotter(Service):
+class Spotter(DSP, Service):
     login_url = 'https://accounts.spotify.com/api'
     api_limit = 50 #100
     
     vinyl_word = 'vinyl'
+    max_artists_on_album = 4
+    max_tracks_album_playlist = 30
     
     def __init__(self):
         super().__init__()
@@ -82,7 +87,7 @@ class Spotter(Service):
             save_token(SPOTIFY_TOKENS_FOLDER, user_id, token_info)
             
         else:
-            print(f'{response.status_code} - {response.reason}')
+            self.add_text(f'{response.status_code}: {response.reason}')
                
     def connect(self, user_id=None):
         client_credentials_manager = None
@@ -102,15 +107,15 @@ class Spotter(Service):
             auth_header = b64encode(six.text_type(client_id + ':' + client_secret).encode('ascii'))
             headers = {'Authorization': f'Basic {auth_header.decode("ascii")}'}
             
-            response = requests.post(url = f'{SPOTIFY_AUTH_URL}/api/token',
-                                     data = {'grant_type': 'refresh_token',})
+            # # response = requests.post(url = f'{SPOTIFY_AUTH_URL}/api/token',
+            # #                          data = {'grant_type': 'refresh_token',})
 
             token_info = self.get_token(f'{SPOTIFY_AUTH_URL}/api/token',
                                         refresh_token=refresh_token,
                                         data=data, headers=headers)
 
             if token_info:
-                access_token = token_info['access_token']
+                # # access_token = token_info['access_token']
                 cache_handler = MemoryCacheHandler(token_info)
 
             auth_manager = SpotifyOAuth(client_id=client_id,
@@ -127,6 +132,7 @@ class Spotter(Service):
                           auth_manager=auth_manager)
         
     def get_albums(self):
+        print('getting albums data')
         total = None
         offset = 0
         
@@ -135,6 +141,7 @@ class Spotter(Service):
         info_2 = {}
         info_3 = {}
         
+        self.show_progress(offset, total)
         while total is None or offset < total:
             results = self.sp.current_user_saved_albums(limit=50, offset=offset)
             info__1 = {}
@@ -152,7 +159,7 @@ class Spotter(Service):
             info__1['track_list'] = [[track['id'] for track in item['album']['tracks']['items']] for item in items]
             info__1['album_duration'] = [sum(round(track['duration_ms']/(1000*60), 4) for track in item['album']['tracks']['items']) \
                                        for item in items]
-            info__1['replacement'] = ['US' not in item['album']['available_markets'] for item in items]
+            ##info__1['replacement'] = ['US' not in item['album']['available_markets'] for item in items]
             info__1['upc'] = [item['album']['external_ids']['upc'] for item in items]
             info__1['release_date'] = [self.convert_release_date(item['album']['release_date'],
                                                                  item['album']['release_date_precision']) for item in items]
@@ -168,7 +175,7 @@ class Spotter(Service):
                     i_0[key] = i_0.get(key, []) + i__0[key]
                                                                         
             offset += len(items)
-            print(f'{offset} / {total}')
+            self.show_progress(offset, total)
 
         albums_df = DataFrame(info_1)
         artists_df = DataFrame(info_2).drop_duplicates()
@@ -185,7 +192,9 @@ class Spotter(Service):
     def get_tracks_info(self, track_ids):
         total_rows = len(track_ids)
         info_0 = {}
-        for i in range(ceil(total_rows/self.api_limit)):
+        max_rows = ceil(total_rows/self.api_limit)
+        for i in range(max_rows):
+            self.show_progress(i, max_rows)
             track_ids__0 = track_ids[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
             info__0 = {}
             
@@ -195,11 +204,12 @@ class Spotter(Service):
             info__0['artist_ids'] = [[a['id'] for a in t['artists']] for t in results['tracks']]
             info__0['isrc'] = [t['external_ids']['isrc'] for t in results['tracks']]
             info__0['track_duration'] = [round(t['duration_ms']/(1000*60), 4) for t in results['tracks']]
-            info__0['explict'] = [t['explicit'] for t in results['tracks']]
-            
+            info__0['explicit'] = [t['explicit'] for t in results['tracks']]
+                        
             for key in info__0.keys():
                 info_0[key] = info_0.get(key, []) + info__0[key]
 
+        self.show_progress(max_rows, max_rows)
         tracks_df = DataFrame(info_0)
         
         return tracks_df
@@ -212,7 +222,9 @@ class Spotter(Service):
     def get_soundtrack_info(self, track_ids):
         total_rows = len(track_ids)
         info_0 = {}
-        for i in range(ceil(total_rows/self.api_limit)):
+        max_rows = ceil(total_rows/self.api_limit)
+        for i in range(max_rows):
+            self.show_progress(i, max_rows)
             track_ids__0 = track_ids[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
             info__0 = {}
             
@@ -223,6 +235,7 @@ class Spotter(Service):
             for key in info__0.keys():
                 info_0[key] = info_0.get(key, []) + info__0[key]
 
+        self.show_progress(max_rows, max_rows)
         tracks_df = DataFrame(info_0)
         
         return tracks_df
@@ -236,7 +249,9 @@ class Spotter(Service):
     def get_artists_info(self, artist_ids):
         total_rows = len(artist_ids)
         info_0 = {}
-        for i in range(ceil(total_rows/self.api_limit)):
+        max_rows = ceil(total_rows/self.api_limit)
+        for i in range(max_rows):
+            self.show_progress(i, max_rows)
             artist_ids__0 = artist_ids[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
             info__0 = {}
             
@@ -248,6 +263,7 @@ class Spotter(Service):
             for key in info__0.keys():
                 info_0[key] = info_0.get(key, []) + info__0[key]
 
+        self.show_progress(max_rows, max_rows)
         artists_df = DataFrame(info_0)
         
         return artists_df
@@ -264,131 +280,76 @@ class Spotter(Service):
         
         return release_date
     
-    def get_playlists(self):
+    def get_playlists(self, various_artist_id=None):
+        print('getting playlists data')
         total = None
         offset = 0
         
         # set up placeholders for results
         possible_lists = []
         
+        self.show_progress(offset, total)
         while total is None or offset < total:
             results = self.sp.current_user_playlists(limit=50, offset=offset)
             
             total = results['total']
             items = results['items']
 
-            names = [p['name'] for p in items]
-            print(f'Names: {names}')
             possible_lists += [p['id'] for p in items if self.vinyl_word.lower() in p['name'].lower()]
             
             offset += len(items)
-            print(f'{offset} / {total}')
+            self.show_progress(offset, total)
             
         if len(possible_lists):
-            info_0 = {}
+            info_1 = {}
+            info_2 = {}
+            info_3 = {}
             for p_list in possible_lists:
-                info__0 = {}
+                info__1 = {}
+                info__2 = {}
+                info__3 = {}
+                
+                results = self.sp.playlist(p_list)
+                info__1['album_id'] = [p_list]
+                info__1['album_name'] = [results['name']]
+                info__1['album_type'] = [results['type']]
+                info__1['image_src'] = [results['images'][0]['url']]
+                info__1['replacement'] = [False]
+                info__1['upc'] = [None]
+                
                 results = self.sp.playlist_items(p_list)
-                #input(results['items'])
-                info__0['album_id'] = results['id']
-                info__0['image_src'] = results['images'][0]['url']
-                info__0['album_name'] = results['name']
-                info__0['album_type'] = results['type']
-                #info__0[]
-        
-        print(f'Possible lists: {possible_lists}')
+                items = results['items']
+                if len(items) > self.max_tracks_album_playlist:
+                    # this is multiple albums on one playlist
+                    pass
+                
+                else:
+                    # this is one playlist
+                    info__1['track_list'] = [[t['track']['id'] for t in items]]
+                    artist_ids = [[a['id'] for a in t['track']['artists']] for t in items]
+                    info__1['artist_ids'] =  [artist_ids] if len(artist_ids) <= self.max_artists_on_album else [[various_artist_id]]
+                    info__1['album_duration'] = [sum(t['track']['duration_ms'] for t in items)/(1000*60)]
+                    info__1['release_date'] = [max(self.convert_release_date(t['track']['album']['release_date'],
+                                                                             t['track']['album']['release_date_precision']) \
+                                                                                 for t in items)]
+                    info__2['artist_id'] = [a['id'] for t in items for a in t['track']['artists']]
+                    info__2['artist_name'] = [a['name'] for t in items for a in t['track']['artists']]
 
-        # # info__0 = {}
-        # # info__0['album_id'] = [p['id'] for p in results['items']]
-        # # info__0['image_src'] = [p['images'][0]['url'] for p in results['items']]
-        # # info__0['album_name'] = [p['name'] for p in results['items']]
-        # # results['items'][0]['id']
-
-        albums_df = None
-        artists_df = None
-        ownerships_df = None
+                    info__3['album_id'] = [p_list]
+                    info__3['like_date'] = [min(t['added_at'] for t in items)]
+                
+                    for i_0, i__0 in zip([info_1, info_2, info_3], [info__1, info__2, info__3]):
+                        for key in i__0.keys():
+                            i_0[key] = i_0.get(key, []) + i__0[key]
+                                                                        
+        albums_df = DataFrame(info_1)
+        artists_df = DataFrame(info_2).drop_duplicates()
+        ownerships_df = DataFrame(info_3)
+                
         return albums_df, artists_df, ownerships_df
     
-    # OLD FUNCTIONS
-    # # def get_track_elements(self, uri):
-    # #     results = self.sp.track(uri)
-        
-    # #     elements = {'uri': results['uri'],
-    # #                 'name': results['name'],
-    # #                 'artist_uri': [artist['uri'] for artist in results['artists']],
-    # #                 'album_uri': results['album']['uri'],
-    # #                 'explicit': results['explicit'],
-    # #                 'popularity': results['popularity'],
-    # #                 }
-    # #     return elements
 
-    # # def get_artist_elements(self, uri):
-    # #     results = self.sp.artist(uri)
-
-    # #     elements = {'uri': results['uri'],
-    # #                 'name': results['name'],
-    # #                 'genres': results['genres'],
-    # #                 'popularity': results['popularity'],
-    # #                 'followers': results['followers']['total'],
-    # #                 'src': self.get_image_src(results['images'], name=results['name']),
-    # #                 }
-    # #     return elements
-
-    # # def get_album_elements(self, uri):
-    # #     results = self.sp.album(uri)
-
-    # #     elements = {'uri': results['uri'],
-    # #                 'name': results['name'],
-    # #                 'genres': results['genres'],
-    # #                 'popularity': results['popularity'],
-    # #                 'release_date': self.get_date(results['release_date'], results['release_date_precision']),
-    # #                 'src': self.get_image_src(results['images'], name=results['name']),
-    # #                 }
-    # #     return elements
-
-    # # def get_image_src(self, result_images, name=None):
-    # #     if len(result_images):
-    # #         # get src from Spotify
-    # #         src = result_images[0]['url']
-
-    # #     elif name:
-    # #         # get first result from Google
-    # #         src = self.gimager.get_image_src(name)
-
-    # #     else:
-    # #         # return null
-    # #         src = None
-
-    # #     return src
-
-    # # def search_for_track(self, artist, title):
-    # #     results = self.sp.search(q=f'artist: {artist} track: {title}', type='track')
-    # #     first_result = results['tracks']['items'][0]
-
-    # #     uris = {'track': first_result['uri'],
-    # #             'artists': [artist['uri'] for artist in first_result['artists']],
-    # #             'album': first_result['album']['uri'],
-    # #             }
-    # #     return uris
-
-    # # def get_user_elements(self, user):
-    # #     results = self.sp.user(user)
-
-    # #     elements = {'uri': results['uri'],
-    # #                 'followers': results['followers']['total'],
-    # #                 'src': self.get_image_src(results['images']),
-    # #                 }
-    # #     return elements
-
-    # # def get_audio_features(self, uri):
-    # #     results = self.sp.audio_features(uri)
-
-    # #     features = {key: results[0][key] for key in self.audio_features}
-    # #     features['duration'] = results[0]['duration_ms'] / 1000 / 60
-
-    # #     return features
-
-class Sounder(Service):
+class Sounder(DSP, Service):
     def __init__(self):
         super().__init__()
         self.username = None
@@ -434,136 +395,223 @@ class Sounder(Service):
         return None, None, None    
         
 
-class MusicBrainer:
-    url = 'https://musicbrainz.org/ws/2'
+class MusicBrainer(Service, Texter):
+    url = 'https://musicbrainz.org/ws/2' ## should pull from locations.py
     data = {'fmt': 'json'}
     api_rate_limit = 1 # calls per second
-    calls_per_isrc = 4
-    calls_per_upc = 1
+
     rid_limit = 100
     
-    album_types = ['compilation', 'album', 'single']
-
+    album_types = ['soundtrack', 'compilation', 'album', 'ep', 'live', 'remix']
+    non_album_types = ['single']
+    
+    remove_words = [{'position': 'start',
+                     'words': ['Remastered', 'Spotify Exclusive', '.*Anniversary Edition', 'Special.*Edition']},
+                    {'position': 'end',
+                     'words': ['Deluxe', 'Deluxe Edition', 'Deluxe Version', 'Remaster', 'Remastered', 'Standard Edition']}]
+                    
     def __init__(self):
-        pass
-    
-    def connect(self):
-        pass
-    
-    def disconnect(self):
-        pass
-    
-    def get_compilations_data(self, tracks_df):
-        print('getting compilations data')
-        tracks_df = self.get_compilations_info(tracks_df['isrc'].to_list())
+        super().__init__()
+       
+    def call_mb(self, term, query):
+        try:
+            response = requests.get(f'{self.url}/{term}', params=dict({'query': query}, **self.data), timeout=10)
+            sleep(1 / self.api_rate_limit)
+            if response.ok:
+                return response
+            else:
+                self.display_status(response)
+                return self.no_response()
+            
+        except requests.exceptions.RequestException as e:
+            print(f'Request failed: {e}')
+            return self.no_response()
+
+    def get_recordings_data(self, tracks_df):
+        print('getting recordings data')
+        tracks_df = self.get_recordings_info(tracks_df['isrc'].to_list())
         
         return tracks_df
-    
-    def get_compilations_info(self, isrcs):
-        # # total_rows = len(isrcs)
+
+    def get_recordings_info(self, isrcs):
+        total_rows = len(isrcs)
         info_0 = {}
-        for isrc in isrcs:
-        # # for i in range(ceil(total_rows/self.api_limit)):
-            isrcs__0 = [isrc] #isrcs[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
-            print(f'ISRCs: {isrcs__0}')
+        for i, isrc in enumerate(isrcs):
+            isrcs__0 = [isrc] 
+            self.show_progress(i + 1, total_rows, message=f'ISRC: {isrc}')
+            
             info__0 = {}
             
             info__0['isrc'] = isrcs__0
-            info__0['release_year'] = [self.get_first_release_year(isrc) for isrc in isrcs__0]
+            info__0['iswc'] = [self.get_iswc(isrc) for isrc in isrcs__0]
             
             for key in info__0.keys():
                 info_0[key] = info_0.get(key, []) + info__0[key]
                 
-            sleep(self.api_rate_limit * self.calls_per_isrc)
-
         tracks_df = DataFrame(info_0)
         
         return tracks_df
     
-    def get_iswc(self, isrc):
-        iswc = None
-
-        response = requests.get(f'{self.url}/recording/?query=isrc:{isrc}', data=self.data)
-        recordings = response.json()['recordings']
-        if len(recordings):
-            rid = response.json()['recordings'][0]['id']
-            response = requests.get(f'{self.url}/work/?query=rid:{rid}', data=self.data)
-            works = response.json()['works']
-            if len(works):
-                wid = response.json()['works'][0]['id']
-                response = requests.get(f'{self.url}/work/?query=wid:{wid}', data=self.data)
-                iswc = response.json()['works'][0]
-
-        return iswc
-
-    def get_release_years(self, iswc):
-        if iswc:
-            rids = [w['recording']['id'] for w in iswc['relations'] if w['type'] == 'performance']
-            rid_ors = '%20OR%20rid:'.join(rids[0:min(self.rid_limit, len(rids))]) # stay within uri limit
-            response = requests.get(f'{self.url}/recording/?query=rid:{rid_ors}', data=self.data)
-            release_years = [int(r.get('first-release-date')[0:4]) for r in response.json()['recordings'] if r.get('first-release-date')]
+    def get_works_data(self, tracks_df):
+        print('getting works data')
+        tracks_df = self.get_works_info(tracks_df['iswc'].to_list())
         
-        else:
-            release_years = []
-
-        return release_years
+        return tracks_df
     
-    def get_first_release_year(self, isrc):
-        iswc = self.get_iswc(isrc)
-        if iswc:
-            release_years = self.get_release_years(iswc)
-            first_release_year = min(release_years)
-        else:
-            first_release_year = None
-
-        return first_release_year 
-    
-    def get_barcodes_data(self, albums_df):
-        print('getting categories data')
-        albums_df = self.get_barcodes_info(albums_df['upc'].to_list())
-        
-        return albums_df
-    
-    def get_barcodes_info(self, upcs):
-        # # total_rows = len(isrcs)
+    def get_works_info(self, iswcs):
+        total_rows = len(iswcs)
         info_0 = {}
-        for upc in upcs:
-        # # for i in range(ceil(total_rows/self.api_limit)):
-            upcs__0 = [upc] #isrcs[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
-            print(f'UPCs: {upcs__0}')
+        for i, iswc in enumerate(iswcs):
+            iswcs__0 = [iswc] 
+            self.show_progress(i + 1, total_rows, message=f'ISWC: {iswc}')
+            
             info__0 = {}
             
-            info__0['upc'] = upcs__0
-            info__0['release_type'] = [self.get_release_type(upc) for upc in upcs__0]
+            info__0['iswc'] = iswcs__0
+            info__0['release_year'] = [self.get_first_release_year(iswc) for iswc in iswcs__0]
             
             for key in info__0.keys():
                 info_0[key] = info_0.get(key, []) + info__0[key]
                 
-            sleep(self.api_rate_limit * self.calls_per_upc)
+        tracks_df = DataFrame(info_0)
+        
+        return tracks_df
+       
+    def get_iswc(self, isrc):
+        iswc = None
 
+        response = self.call_mb('recording', f'isrc:{isrc}')
+        if response.ok:
+            recordings = response.json()['recordings']
+            if len(recordings):
+                rid = response.json()['recordings'][0]['id']
+                response = self.call_mb('work', f'rid:{rid}')                
+                if response.ok:
+                    works = response.json()['works']
+                    if len(works):
+                        wid = response.json()['works'][0]['id']
+                        response = self.call_mb('work', f'wid:{wid}')
+                        if response.ok:
+                            iswc = response.json()['works'][0].get('iswcs', [None])[0]
+
+        return iswc
+
+    def get_release_years(self, iswc):
+        release_years = []
+        response = self.call_mb('work', f'iswc:{iswc}')
+        if response.ok:
+            rids = [w['recording']['id'] for w in response.json()['works'][0]['relations'] if w['type'] == 'performance']
+            rid_ors = (' OR ').join(f'"{r}"' for r in rids[0:min(self.rid_limit, len(rids))]) # stay within uri limit
+            response = self.call_mb('recording', f'rid:({rid_ors})')
+            if response.ok:
+                release_years = [int(r.get('first-release-date')[0:4]) for r in response.json()['recordings'] \
+                                    if r.get('first-release-date')]
+
+        return release_years
+    
+    def get_first_release_year(self, iswc):
+        release_years = self.get_release_years(iswc)
+        first_release_year = min(release_years) if release_years else None
+    
+        return first_release_year 
+    
+    def get_barcodes_data(self, albums_df):
+        print('getting barcodes data')
+        albums_df = self.get_barcodes_info(albums_df['upc'].to_list(),
+                                           albums_df['artist_name'].to_list(),
+                                           albums_df['album_name'].to_list(),
+                                           albums_df['release_date'].to_list())
+        
+        return albums_df
+    
+    def get_barcodes_info(self, upcs, artist_names=None, album_names=None, release_dates=None):
+        total_rows = len(upcs)
+        info_0 = {}
+        for i, upc in enumerate(upcs):
+            self.show_progress(i, total_rows, message=f'UPC: {upc}')
+            
+            info__0 = {}
+            
+            info__0['upc'] = [upc]
+            
+            release_type = None           
+            for kwargs in [{'upc': upc}, # barcode
+                           {'artist_name': artist_names[i], 'album_name': album_names[i]}, # artist name and album title
+                           {'alias_name': artist_names[i], 'album_name': album_names[i]}, # artist name and album title
+                           {'artist_name': artist_names[i], 'release_date': release_dates[i]}, # release by artist on date
+                           {'album_name': album_names[i], 'release_date': release_dates[i]}, # release on date with title
+                           ]:
+                release_type = self.get_release_type(**kwargs)
+                if release_type:
+                    break
+
+            info__0['release_type'] = [release_type]
+            
+            for key in info__0.keys():
+                info_0[key] = info_0.get(key, []) + info__0[key]
+                
+        self.show_progress(total_rows, total_rows)
         albums_df = DataFrame(info_0)
         
         return albums_df
     
-    def get_release_type(self, upc):
-        release_types = []
-        response = requests.get(f'{self.url}/release/?query=barcode:{upc}', data=self.data)
-        if response.ok:
-            releases = response.json()['releases']
-            if len(releases):
-                release_groups = releases[0]['release-group']
-                release_types = []
-                if 'secondary-types' in release_groups:
-                    release_types += [rt for rt in release_groups['secondary-types']]
-                elif 'primary-type' in release_groups:
-                    release_types += release_groups['primary-type']
+    def get_release_type(self, upc=None, artist_name=None, alias_name=None, album_name=None, release_date=None):
+        release_type = None
+        query = ''
+        
+        if upc:
+            # barcode
+            query = f'barcode:"{upc}"'
+
+        else:    
+            # combination of artist, title and release date   
+            queries = []
+            if alias_name:
+                aliases = self.get_aliases(alias_name)
+                if aliases:
+                    artist_name = aliases[0]
+            
+            if artist_name:
+                queries.append(f'artist:"{artist_name}"')
+            if album_name:
+                title, _ = self.remove_parentheticals(album_name.replace(" - ", " ").replace("-", ""), RemoveWords.albums)
+                queries.append(f'title:"{title}"')
+            if release_date:
+                queries.append(f'date:{release_date.strftime("%Y-%m-%d")}')
+            
+            if len(queries) >= 2:
+                # enough information to search
+                query = ' AND '.join(queries)
+            
+        if query:
+            not_queries = ' OR '.join(f'"{t}"' for t in self.non_album_types)
+            query += f' AND NOT primarytype:({not_queries})'
+            release_types = []
+        
+            response = self.call_mb('release', f'{query}')
+            if response.ok:
+                releases = response.json()['releases']
+                if len(releases):
+                    release_groups = releases[0]['release-group']
+                    release_types = []
+                    if 'secondary-types' in release_groups:
+                        release_types += [rt.lower() for rt in release_groups['secondary-types']]
+                    elif 'primary-type' in release_groups:
+                        release_types += [release_groups['primary-type'].lower()]
                 
-        release_type = next((a for a in self.album_types if a in [r.lower() for r in release_types]), None)
-        
+            release_type = next((a for a in self.album_types if a in release_types), None)
+            self.add_text(f'release types: {release_types}')
+
         return release_type
+    
+    def get_aliases(self, artist_name):
+        aliases = []
+        response = self.call_mb('artist', f'alias:"{artist_name}"')
+        if response.ok:
+            aliases = [artist['name'] for artist in response.json()['artists'] if artist['name'] != artist_name]
+            
+        return aliases
         
-
-
 Services = {'Spotify': Spotter,
             'SoundCloud': Sounder,
             }

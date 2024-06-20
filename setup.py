@@ -1,4 +1,6 @@
-from common.data import Neon
+''' Ensure database and listener are good to go '''
+
+from data.database import Neon
 from music.users import User
 
 def set_up_database(drop_tables=False, drop_views=False):
