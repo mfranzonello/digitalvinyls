@@ -147,3 +147,4 @@ dmypy.json
 /.vs/playpaws/v17
 /.vs/playpaws
 /.vs
+/auths/spotify/authorize_spotify.py
