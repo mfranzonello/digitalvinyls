@@ -139,9 +139,9 @@ class Sonoser(Caller):
         
     # # def play_spotify_album(self, track_list):
     # #     requests.get(url=f'{SONOS_HOST}:{SONOS_PORT}/clearqueue')
-    # #     for i, track_id in enumerate(track_list):
+    # #     for i, track_uri in enumerate(track_list):
     # #         n = 'now' if i == 0 else 'next'
-    # #         requests.get(url=f'{SONOS_HOST}:{SONOS_PORT}/{self.controller_name}/spotify/{n}/spotify:track:{track_id}')
+    # #         requests.get(url=f'{SONOS_HOST}:{SONOS_PORT}/{self.controller_name}/spotify/{n}/spotify:track:{track_uri}')
             
     def play_spotify_album(self, track_list, titles):
         ms = MusicService('Spotify')
@@ -173,10 +173,10 @@ class Sonoser(Caller):
         device = discover_by_name(self.controller_name)
         device.clear_queue()
         
-        for track_id, title in zip(track_list, titles):
-            uri = f'{tags[0]}{track_id}{tags[1]}'
+        for track_uri, title in zip(track_list, titles):
+            uri = f'{tags[0]}{track_uri}{tags[1]}'
             title = 'HEY'
-            item_id = f'spotify:track:{track_id}'
+            item_id = f'spotify:track:{track_uri}'
             parent_id = spotifyDef['parent']['album'] + 'HO'
             didl = DidlItem(title=title, parent_id=parent_id, item_id=item_id, desc=ms.desc)
             # # if i == 0:

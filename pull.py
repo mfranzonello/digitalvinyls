@@ -16,8 +16,8 @@ def update_albums(neon, user):
                     case 'albums':
                         albums_df, artists_df, ownerships_df = service.get_albums()
                     case 'playlists':
-                        various_artist_id = neon.get_various_artist_id(service_id)
-                        albums_df, artists_df, ownerships_df = service.get_playlists(various_artist_id)
+                        various_artist_uri = neon.get_various_artist_uri(service_id)
+                        albums_df, artists_df, ownerships_df = service.get_playlists(various_artist_uri)
                     case 'favorites':
                         albums_df, artists_df, ownerships_df = service.get_favorites()
                     case _:

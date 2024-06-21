@@ -161,27 +161,27 @@ class Neon:
             # # self.execute(sql)
             
     def update_artists(self, artists_df, service_id):
-        columns = ['artist_id', 'artist_name']
-        self.update_service_table(artists_df, 'artists', columns, ['artist_id'], service_id=service_id)
+        columns = ['artist_uri', 'artist_name']
+        self.update_service_table(artists_df, 'artists', columns, ['artist_uri'], service_id=service_id)
         
     def update_albums(self, albums_df, source_id):
-        columns = ['album_id', 'artist_ids', 'album_name', 'album_type', 
-                   'release_date', 'image_src', 'album_duration', #'genres',
-                   'track_list', 'replacement', 'upc'] #skip_list
-        self.update_service_table(albums_df, 'albums', columns, ['album_id'], source_id=source_id)
+        columns = ['album_uri', 'artist_uris', 'album_name', 'album_type', 
+                   'release_date', 'image_src', 'album_duration',
+                   'track_uris', 'replacement', 'upc']
+        self.update_service_table(albums_df, 'albums', columns, ['album_uri'], source_id=source_id)
         
     def update_ownerships(self, ownerships_df, source_id, user_id):
-        columns = ['user_id', 'album_id', 'like_date'] #, 'rating', 'ranking']
+        columns = ['user_id', 'album_uri', 'like_date']
         ownerships_df['user_id'] = user_id
-        self.update_service_table(ownerships_df, 'ownerships', columns, ['user_id', 'album_id'], source_id=source_id, drop=True)
+        self.update_service_table(ownerships_df, 'ownerships', columns, ['user_id', 'album_uri'], source_id=source_id, drop=True)
         
     def update_tracks(self, tracks_df, service_id):
-        columns = ['track_id', 'track_name', 'track_duration', 'artist_ids', 'isrc', 'explicit']
-        self.update_service_table(tracks_df, 'tracks', columns, ['track_id'], service_id=service_id)
+        columns = ['track_uri', 'track_name', 'track_duration', 'artist_uris', 'isrc', 'explicit']
+        self.update_service_table(tracks_df, 'tracks', columns, ['track_uri'], service_id=service_id)
 
     def update_soundtracks(self, tracks_df, service_id):
-        columns = ['track_id', 'instrumentalness']
-        self.update_service_table(tracks_df, 'tracks', columns, ['track_id'], service_id=service_id, update_only=True)
+        columns = ['track_uri', 'instrumentalness']
+        self.update_service_table(tracks_df, 'tracks', columns, ['track_uri'], service_id=service_id, update_only=True)
 
     def update_recordings(self, tracks_df):
         columns = ['isrc', 'iswc']
@@ -199,119 +199,37 @@ class Neon:
         columns = ['user_id', 'first_name', 'last_name', 'service_user_ids', 'image_src']
         self.update_service_table(user, 'users', columns, ['user_id'])
         
-    def update_series(self, user_id, series_name, artist_id=None, artist_name=None, album_name_pattern=None, album_not_pattern=None):
-        artist_yes = f'artist_ids ? {self.dbify(artist_id)}' if artist_id else None
-        artist_maybe = f'LOWER(artist_names) SIMILAR TO {self.regify(album_name_pattern)}' if artist_name else None
-        album_yes = f'LOWER(album_names) SIMILAR TO {self.regify(album_name_pattern)}' if album_name_pattern else None
-        album_no = f'LOWER(album_name) NOT SIMILAR TO {self.regify(album_not_pattern)}' if album_name_pattern else None
+    # # def update_series(self, user_id, series_name, artist_uri=None, artist_name=None, album_name_pattern=None, album_not_pattern=None):
+    # #     artist_yes = f'artist_uris ? {self.dbify(artist_uri)}' if artist_uri else None
+    # #     artist_maybe = f'LOWER(artist_names) SIMILAR TO {self.regify(album_name_pattern)}' if artist_name else None
+    # #     album_yes = f'LOWER(album_names) SIMILAR TO {self.regify(album_name_pattern)}' if album_name_pattern else None
+    # #     album_no = f'LOWER(album_name) NOT SIMILAR TO {self.regify(album_not_pattern)}' if album_name_pattern else None
         
-        sql = (f'WITH new_series AS (SELECT jsonb_agg(row_data) AS album_list '
-               f'FROM (SELECT jsonb_build_array(source_id, album_id) AS row_data '
-               f'FROM user_albums WHERE {" AND ".join(c for c in [artist_yes, artist_maybe, album_yes, album_no] if c is not None)} '
-               f'ORDER BY release_date)) '
+    # #     sql = (f'WITH new_series AS (SELECT jsonb_agg(row_data) AS album_list '
+    # #            f'FROM (SELECT jsonb_build_array(source_id, album_uri) AS row_data '
+    # #            f'FROM user_albums WHERE {" AND ".join(c for c in [artist_yes, artist_maybe, album_yes, album_no] if c is not None)} '
+    # #            f'ORDER BY release_date)) '
 
-               f'INSERT INTO series (user_id, series_name, album_list) '
-               f'VALUES ({user_id}, {self.dbify(series_name)}, (SELECT album_list FROM new_series)) '
-               f';'
-               )
-        self.execute(sql)
-
-
-    ''' manual changes '''
-    # # def get_summary_of_ranks(self, user_id):    
-    # #     # get a summary of what the user has
-    # #     sql = (f"SELECT category, COUNT(CASE WHEN ranking IS NOT NULL THEN 1 END) AS ranked, "
-    # #            f"COUNT(CASE WHEN ranking IS NULL THEN 1 END) AS unranked "
-    # #            f"FROM albums_to_rank WHERE user_id = {user_id} AND category NOT IN ('single', 'ep', 'playlist') "
-    # #            f"GROUP BY category "
-    # #            f";")
-    # #     summary_df = self.read_sql(sql)
-    # #     return summary_df
-      
-    # # def get_albums_to_compare(self, user_id):
-    # #     # for each category that has no ranked albums, select one and rank it as 1
-    # #     summary_df = self.get_summary_of_ranks(user_id)
-
-    # #     # might need to check that user has any albums?
-    # #     unranked_categories = summary_df.query('ranked == 0')['category']
-    # #     for category in unranked_categories:
-    # #         sql = (f"SELECT source_id, album_id, album_name, artist_name FROM albums_to_rank "
-    # #                f"WHERE category = '{category}' AND user_id = {user_id} "
-    # #                f"ORDER BY RANDOM() LIMIT 1 "
-    # #                f";"
-    # #                )
-    # #         albums_df = self.read_sql(sql)
-    # #         source_id, album_id, album_name, artist_name = albums_df.iloc[0][['source_id', 'album_id', 'album_name', 'artist_name']]
-    # #         sql = (f"UPDATE ownerships SET ranking = 1 WHERE user_id = '{user_id}' "
-    # #                f"AND source_id = '{source_id}' AND album_id = '{album_id}' "
-    # #                f";"
-    # #                )
-    # #         self.execute(sql)
-            
-    # #         # adjust the summary table
-    # #         summary_df.loc[summary_df['category'] == category, ['ranked', 'unranked']] += 1, -1
-        
-    # #     # pick an album that is already ranked and has other albums in that category
-    # #     categories_df = summary_df.query('unranked > 0')
-    # #     if not categories_df.empty:
-    # #         # select a category based on the distribution of all albums
-    # #         category = categories_df.sample(weights=categories_df[['ranked', 'unranked']].sum(1))['category'].iloc[0]
-    # #         sql = (f"WITH ranked_albums AS "
-    # #                f"(SELECT source_id, album_id, album_name, artist_name, ranking, rating, category FROM albums_to_rank "
-    # #                f"WHERE user_id = {user_id} AND category = '{category}'), "
-                   
-    # #                f"first_pick AS "
-    # #                f"(SELECT source_id, album_id, album_name, artist_name, ranking, rating, category FROM ranked_albums "
-    # #                f"WHERE ranking IS NOT NULL ORDER BY RANDOM() LIMIT 1), "
-
-    # #                f"second_pick AS "
-    # #                f"(SELECT source_id, album_id, album_name, artist_name, ranking, rating, category FROM ranked_albums "
-    # #                f"WHERE (source_id, album_id) != (SELECT source_id, album_id FROM first_pick) "
-    # #                f"ORDER BY RANDOM() LIMIT 1) " #AND category = (SELECT category FROM first_pick)
-                   
-    # #                f"SELECT * FROM first_pick UNION SELECT * FROM second_pick " 
-    # #                f";"
-    # #                )
-    # #         albums_df = self.read_sql(sql)
-            
-    # #     else:
-    # #         albums_df = DataFrame()
-        
-    # #     return albums_df, summary_df
-    
-    # # def update_album_rank(self, user_id, source_id, album_id, category, ranking):
-    # #     # move other albums first
-    # #     sql = (f"UPDATE ownerships SET ranking = ownerships.ranking + 1 "
-    # #            f"FROM albums_to_rank "
-    # #            f"WHERE ownerships.user_id = albums_to_rank.user_id "
-    # #            f"AND ownerships.source_id = albums_to_rank.source_id "
-    # #            f"AND ownerships.album_id = albums_to_rank.album_id "
-    # #            f"AND albums_to_rank.user_id = {user_id} "
-    # #            f"AND albums_to_rank.ranking >= {ranking} "
-    # #            f"AND albums_to_rank.category = '{category}' "
-    # #            f";"
-    # #            )
-    # #     self.execute(sql, commit=False)
-        
-    # #     # insert ranking of album
-    # #     sql = (f"UPDATE ownerships SET ranking = {ranking} "
-    # #            f"WHERE user_id = {user_id} AND source_id = '{source_id}' AND album_id = '{album_id}' "
-    # #            f";"
+    # #            f'INSERT INTO series (user_id, series_name, album_list) '
+    # #            f'VALUES ({user_id}, {self.dbify(series_name)}, (SELECT album_list FROM new_series)) '
+    # #            f';'
     # #            )
     # #     self.execute(sql)
-        
-    def update_album_rating(self, user_id, source_id, album_id, rating):
+
+
+    ''' manual changes '''       
+    def update_album_rating(self, user_id, source_id, album_uri, rating):
         # need to ensure that rankings are adjusted -- can't have a B+ album above an A-
         sql = (f"UPDATE ownerships SET rating = {rating} WHERE user_id = {self.dbify(user_id)} "
-               f"AND source_id = {self.dbify(source_id)} AND album_id = {self.dbify(album_id)} "
+               f"AND source_id = {self.dbify(source_id)} AND album_uri = {self.dbify(album_uri)} "
                f";"
                )
         self.execute(sql)
 
     def get_album_comparisons(self, user_id):
         sql = (f"WITH release_categories AS "
-               f"(SELECT user_id, source_id, album_id, category "
-               f"FROM ownerships JOIN album_categories USING(source_id, album_id) "
+               f"(SELECT user_id, source_id, album_uri, category "
+               f"FROM ownerships JOIN album_categories USING(source_id, album_uri) "
                f"WHERE user_id = {user_id} AND category NOT IN ('single', 'ep', 'playlist')), "
                
                f"availabe_categories AS "
@@ -323,49 +241,49 @@ class Neon:
                f"(SELECT category FROM availabe_categories WHERE num_albums > 1)), "
                
                f"first_pick AS "
-               f"(SELECT source_id, album_id, category FROM release_categories "
+               f"(SELECT source_id, album_uri, category FROM release_categories "
                f"WHERE category IN (SELECT category FROM owned_categories) "
                f"ORDER BY RANDOM() LIMIT 1), "
 
                f"second_pick AS "
-               f"(SELECT source_id, album_id, category FROM release_categories "
+               f"(SELECT source_id, album_uri, category FROM release_categories "
                f"WHERE category = (SELECT category FROM first_pick) "
-               f"AND (source_id, album_id) != (SELECT source_id, album_id FROM first_pick) "
+               f"AND (source_id, album_uri) != (SELECT source_id, album_uri FROM first_pick) "
                f"ORDER BY RANDOM() LIMIT 1), "
                
                f"picks AS (SELECT * FROM first_pick UNION SELECT * FROM second_pick) "
 
-               f"SELECT user_id, source_id, album_id, category, album_name, artist_names, ranking "
-               f"FROM picks JOIN albums USING(source_id, album_id) "
-               f"JOIN ownerships USING(source_id, album_id) JOIN sources USING(source_id) "
-               f"JOIN album_artists USING(source_id, album_id) "
-               f"LEFT JOIN release_battles USING(user_id, source_id, album_id) "
+               f"SELECT user_id, source_id, album_uri, category, album_name, artist_names, ranking "
+               f"FROM picks JOIN albums USING(source_id, album_uri) "
+               f"JOIN ownerships USING(source_id, album_uri) JOIN sources USING(source_id) "
+               f"JOIN album_artists USING(source_id, album_uri) "
+               f"LEFT JOIN release_battles USING(user_id, source_id, album_uri) "
                f";"
                )
         albums_df = self.read_sql(sql)
         return albums_df
         
-    def update_album_comparisons(self, user_id, source_id_1, album_id_1, source_id_2, album_id_2, winner):
-        albums = [(source_id_1, album_id_1), (source_id_2, album_id_2)]
-        source_id_w, album_id_w = albums[winner - 1]
-        source_id_l, album_id_l = albums[2 - winner]
+    def update_album_comparisons(self, user_id, source_id_1, album_uri_1, source_id_2, album_uri_2, winner):
+        albums = [(source_id_1, album_uri_1), (source_id_2, album_uri_2)]
+        source_id_w, album_uri_w = albums[winner - 1]
+        source_id_l, album_uri_l = albums[2 - winner]
         # update winner
-        sql = (f"UPDATE ownerships SET wins = COALESCE(wins, '[]'::jsonb) || {self.dbify([[source_id_l, album_id_l]])} "
-               f"WHERE user_id = {user_id} AND source_id = {source_id_w} AND album_id = '{album_id_w}' "
+        sql = (f"UPDATE ownerships SET wins = COALESCE(wins, '[]'::jsonb) || {self.dbify([[source_id_l, album_uri_l]])} "
+               f"WHERE user_id = {user_id} AND source_id = {source_id_w} AND album_uri = '{album_uri_w}' "
                f";")
         self.execute(sql)
 
         # update loser
-        sql = (f"UPDATE ownerships SET losses = COALESCE(losses, '[]'::jsonb) || {self.dbify([[source_id_w, album_id_w]])} "
-               f"WHERE user_id = {user_id} AND source_id = {source_id_l} AND album_id = '{album_id_l}' "
+        sql = (f"UPDATE ownerships SET losses = COALESCE(losses, '[]'::jsonb) || {self.dbify([[source_id_w, album_uri_w]])} "
+               f"WHERE user_id = {user_id} AND source_id = {source_id_l} AND album_uri = '{album_uri_l}' "
                f";")
         self.execute(sql)
 
     def get_album_to_rate(self, user_id, unrated=False):
         wheres = ' AND rating IS NULL ' if unrated else ''
-        sql = (f"SELECT source_id, album_id, artist_names, album_name, rating FROM ownerships "
-               f"JOIN albums USING(source_id, album_id) JOIN sources USING(source_id) "
-               f"JOIN album_artists USING(source_id, album_id) "
+        sql = (f"SELECT source_id, album_uri, artist_names, album_name, rating FROM ownerships "
+               f"JOIN albums USING(source_id, album_uri) JOIN sources USING(source_id) "
+               f"JOIN album_artists USING(source_id, album_uri) "
                f"WHERE user_id = {user_id}{wheres} "
                f"ORDER BY RANDOM() LIMIT 1"
                f";"
@@ -377,10 +295,10 @@ class Neon:
         categories = ['studio', 'compilation', 'soundtrack', 'score']
         cases = ' '.join(f"WHEN '{category}' THEN {i}" for i, category in enumerate(categories)) + f' ELSE {len(categories)}'
         sql = (f"SELECT artist_names, album_name, category, ranking, rating "
-               f"FROM ownerships JOIN release_battles USING(user_id, source_id, album_id) "
-               f"JOIN album_categories USING(source_id, album_id) "
-               f"JOIN albums USING(source_id, album_id) JOIN sources USING(source_id) "
-               f"JOIN album_artists USING(source_id, album_id) "
+               f"FROM ownerships JOIN release_battles USING(user_id, source_id, album_uri) "
+               f"JOIN album_categories USING(source_id, album_uri) "
+               f"JOIN albums USING(source_id, album_uri) JOIN sources USING(source_id) "
+               f"JOIN album_artists USING(source_id, album_uri) "
                f"WHERE user_id = {user_id} AND release_battles.ranking <= {max_ranking} "
                f"ORDER BY CASE category {cases} END, ranking ASC, rating DESC "
                f";"
@@ -404,10 +322,10 @@ class Neon:
         sources_df = self.read_sql(sql)
         return sources_df
     
-    def get_various_artist_id(self, service_id):
-        sql = f'SELECT various_artist_id FROM services WHERE service_id = {self.dbify(service_id)};'
-        various_artist_id = self.read_sql(sql).squeeze() ## squeeze may not be right here
-        return various_artist_id
+    def get_various_artist_uri(self, service_id):
+        sql = f'SELECT various_artist_uri FROM services WHERE service_id = {self.dbify(service_id)};'
+        various_artist_uri = self.read_sql(sql).squeeze() ## squeeze may not be right here
+        return various_artist_uri
 
     def get_table_to_update(self, table_name, service_id=None, source_id=None, limit=1000):# limit=None):
         limits = f'LIMIT {limit}' if limit else ''
@@ -458,17 +376,37 @@ class Neon:
    
 
     ''' get data for push '''
-    def get_user_albums(self, user):
-        sql = f'SELECT * FROM user_albums WHERE user_id = {self.dbify(user.user_id)}'
+    def get_user_albums(self, user_id, min_ranking=None, min_rating=None, categories=None,
+                        min_duration=None, max_duration=None, explicit=None, release_year=None, release_decade=None):
+        wheres = []
+        if min_ranking:
+            wheres.append(f'ranking <= {min_ranking}')
+        if min_rating:
+            wheres.append(f'rating >= {min_rating}')
+        if categories:
+            cats = ', '.join(f"'{c}'" for c in categories)
+            wheres.append(f'category IN ({cats})')
+        if min_duration or max_duration:
+            if min_duration and not max_duration:
+                wheres.append(f'duration >= {min_duration}')
+            elif max_duration and not min_duration:
+                wheres.append(f'duration <= {max_duration}')
+            else:
+                wheres.append(f'duration BETWEEN {min_duration} AND {max_duration}')
+        if release_year:
+            wheres.append(f'EXTRACT(YEAR FROM release_date) = {release_year}')
+        elif release_decade:
+            wheres.append(f"COALESCE(release_decades, jsonb_build_array(FLOOR(EXTRACT(YEAR FROM release_date) / 10) * 10)) ? '{release_decade}'")
+        if explicit is not None:
+            wheres.append(f'COALESCE(explicit, FALSE) = {explicit}')
+
+        sql = f'SELECT * FROM user_albums WHERE user_id = {user_id}{wheres}'
         albums_df = self.read_sql(sql)
         return albums_df
     
-    def get_random_album(self, user_id):
-        sql = (f'SELECT service_id, album_id, artist_name, album_name, '
-               f'track_list ' #', track_names '
-               f'FROM user_albums WHERE user_id = {self.dbify(user_id)} '
-               f'ORDER BY random() LIMIT 1'
-               f';'
-               )
-        album_s = self.read_sql(sql).squeeze()
+    def get_random_album(self, user_id, min_ranking=None, min_rating=None, categories=None,
+                        min_duration=None, max_duration=None, explicit=None, release_year=None, release_decade=None):
+        albums_df = self.get_user_albums(user_id, min_ranking, min_rating, categories,
+                                         min_duration, max_duration, explicit, release_year, release_decade)
+        album_s = albums_df.sample(1)
         return album_s

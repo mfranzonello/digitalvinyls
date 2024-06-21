@@ -21,8 +21,8 @@ def play_album(neon, user, sonoser):
 
     if album_s['service_id'] == 1:
         print(f'Playing {album_s["artist_name"]} - {album_s["album_name"]} from Spotify')
-        #print(album_s['album_id'])
-        sonoser.play_spotify_album(album_s['track_list'], titles=[""]*len(album_s['track_list']))
+        #print(album_s['album_uri'])
+        sonoser.play_spotify_album(album_s['track_list'], titles=['']*len(album_s['track_list']))
     else:
         pass
 

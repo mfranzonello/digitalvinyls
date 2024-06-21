@@ -110,9 +110,9 @@ class Ranker(Texter):
                         
                 if key in ['1', '2']:
                     print('...updating ranks...')
-                    source_id_1, album_id_1 = albums_df.loc[0][['source_id', 'album_id']]
-                    source_id_2, album_id_2 = albums_df.loc[1][['source_id', 'album_id']]
-                    neon.update_album_comparisons(user_id, source_id_1, album_id_1, source_id_2, album_id_2, int(key))
+                    source_id_1, album_uri_1 = albums_df.loc[0][['source_id', 'album_uri']]
+                    source_id_2, album_uri_2 = albums_df.loc[1][['source_id', 'album_uri']]
+                    neon.update_album_comparisons(user_id, source_id_1, album_uri_1, source_id_2, album_uri_2, int(key))
                                        
             else:
                 loop = False
@@ -190,8 +190,8 @@ class Ranker(Texter):
     # #                 pass
                     
     # #             if ranking:
-    # #                 source_id, album_id = albums_df.loc[i-1][['source_id', 'album_id']]
-    # #                 neon.update_album_rank(user_id, source_id, album_id, category, ranking)
+    # #                 source_id, album_uri = albums_df.loc[i-1][['source_id', 'album_uri']]
+    # #                 neon.update_album_rank(user_id, source_id, album_uri, category, ranking)
                     
     # #             for i in [0, 1]:
     # #                 album_s = albums_df.iloc[i]
@@ -211,7 +211,7 @@ class Ranker(Texter):
             loop = self.rate_album(neon, user_id, album_s)
         
     def rate_album(self, neon, user_id, album_s):
-        source_id, album_id, album_name, artist_names, rating = album_s[['source_id', 'album_id',
+        source_id, album_uri, album_name, artist_names, rating = album_s[['source_id', 'album_uri',
                                                                          'artist_names', 'album_name', 'rating']]
         if isna(rating):
             asis = f'{Colors.GREY}blank'
@@ -237,6 +237,6 @@ class Ranker(Texter):
         if (key not in ['ENTER', 'Q']) and (key != current_rating):
             rating = ratings.index(key) + 1
             print(f'...updating rating to {rating}...')
-            neon.update_album_rating(user_id, source_id, album_id, rating)
+            neon.update_album_rating(user_id, source_id, album_uri, rating)
 
         return key != 'Q'

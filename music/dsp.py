@@ -151,12 +151,12 @@ class Spotter(DSP, Service):
             total = results['total']
             items = results['items']
             
-            info__1['artist_ids'] = [[artist['id'] for artist in item['album']['artists']] for item in items]
-            info__1['album_id'] = [item['album']['id'] for item in items]
+            info__1['artist_uris'] = [[artist['id'] for artist in item['album']['artists']] for item in items]
+            info__1['album_uri'] = [item['album']['id'] for item in items]
             info__1['album_name'] = [item['album']['name'] for item in items]
             info__1['image_src'] = [item['album']['images'][0]['url'] for item in items]
             info__1['album_type'] = [item['album']['album_type'] for item in items]
-            info__1['track_list'] = [[track['id'] for track in item['album']['tracks']['items']] for item in items]
+            info__1['track_uris'] = [[track['id'] for track in item['album']['tracks']['items']] for item in items]
             info__1['album_duration'] = [sum(round(track['duration_ms']/(1000*60), 4) for track in item['album']['tracks']['items']) \
                                        for item in items]
             ##info__1['replacement'] = ['US' not in item['album']['available_markets'] for item in items]
@@ -164,10 +164,10 @@ class Spotter(DSP, Service):
             info__1['release_date'] = [self.convert_release_date(item['album']['release_date'],
                                                                  item['album']['release_date_precision']) for item in items]
 
-            info__2['artist_id'] = [artist['id'] for item in items for artist in item['album']['artists']]
+            info__2['artist_uri'] = [artist['id'] for item in items for artist in item['album']['artists']]
             info__2['artist_name'] = [artist['name'] for item in items for artist in item['album']['artists']]
 
-            info__3['album_id'] = info__1['album_id']
+            info__3['album_uri'] = info__1['album_uri']
             info__3['like_date'] = [item['added_at'] for item in items]
             
             for i_0, i__0 in zip([info_1, info_2, info_3], [info__1, info__2, info__3]):
@@ -185,23 +185,23 @@ class Spotter(DSP, Service):
                
     def get_tracks_data(self, tracks_df):
         print('getting track data')
-        tracks_df = self.get_tracks_info(tracks_df['track_id'].to_list())
+        tracks_df = self.get_tracks_info(tracks_df['track_uri'].to_list())
         
         return tracks_df
     
-    def get_tracks_info(self, track_ids):
-        total_rows = len(track_ids)
+    def get_tracks_info(self, track_uris):
+        total_rows = len(track_uris)
         info_0 = {}
         max_rows = ceil(total_rows/self.api_limit)
         for i in range(max_rows):
             self.show_progress(i, max_rows)
-            track_ids__0 = track_ids[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
+            track_uris__0 = track_uris[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
             info__0 = {}
             
-            results = self.sp.tracks(track_ids__0)
-            info__0['track_id'] = track_ids__0  
+            results = self.sp.tracks(track_uris__0)
+            info__0['track_uri'] = track_uris__0  
             info__0['track_name'] = [t['name'] for t in results['tracks']]
-            info__0['artist_ids'] = [[a['id'] for a in t['artists']] for t in results['tracks']]
+            info__0['artist_uris'] = [[a['id'] for a in t['artists']] for t in results['tracks']]
             info__0['isrc'] = [t['external_ids']['isrc'] for t in results['tracks']]
             info__0['track_duration'] = [round(t['duration_ms']/(1000*60), 4) for t in results['tracks']]
             info__0['explicit'] = [t['explicit'] for t in results['tracks']]
@@ -216,20 +216,20 @@ class Spotter(DSP, Service):
 
     def get_soundtracks_data(self, tracks_df):
         print('getting soundtrack data')
-        tracks_df = self.get_soundtrack_info(tracks_df['track_id'].to_list())
+        tracks_df = self.get_soundtrack_info(tracks_df['track_uri'].to_list())
         return tracks_df
     
-    def get_soundtrack_info(self, track_ids):
-        total_rows = len(track_ids)
+    def get_soundtrack_info(self, track_uris):
+        total_rows = len(track_uris)
         info_0 = {}
         max_rows = ceil(total_rows/self.api_limit)
         for i in range(max_rows):
             self.show_progress(i, max_rows)
-            track_ids__0 = track_ids[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
+            track_uris__0 = track_uris[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
             info__0 = {}
             
-            results = self.sp.audio_features(track_ids__0)
-            info__0['track_id'] = track_ids__0
+            results = self.sp.audio_features(track_uris__0)
+            info__0['track_uri'] = track_uris__0
             info__0['instrumentalness'] = [t['instrumentalness'] if t else 0 for t in results]
             
             for key in info__0.keys():
@@ -242,21 +242,21 @@ class Spotter(DSP, Service):
     
     def get_artists_data(self, artists_df):
         print('getting artists data')
-        tracks_df = self.get_artists_info(artists_df['artist_id'].to_list())
+        tracks_df = self.get_artists_info(artists_df['artist_uri'].to_list())
         
         return tracks_df
     
-    def get_artists_info(self, artist_ids):
-        total_rows = len(artist_ids)
+    def get_artists_info(self, artist_uris):
+        total_rows = len(artist_uris)
         info_0 = {}
         max_rows = ceil(total_rows/self.api_limit)
         for i in range(max_rows):
             self.show_progress(i, max_rows)
-            artist_ids__0 = artist_ids[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
+            artist_uris__0 = artist_uris[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
             info__0 = {}
             
-            results = self.sp.artists(artist_ids__0)
-            info__0['artist_id'] = artist_ids__0
+            results = self.sp.artists(artist_uris__0)
+            info__0['artist_uri'] = artist_uris__0
             info__0['artist_name'] = [a['name'] for a in results['artists']]
             info__0['genres'] = [a['genres'] for a in results['artists']]
             
@@ -280,7 +280,7 @@ class Spotter(DSP, Service):
         
         return release_date
     
-    def get_playlists(self, various_artist_id=None):
+    def get_playlists(self, various_artist_uri=None):
         print('getting playlists data')
         total = None
         offset = 0
@@ -310,7 +310,7 @@ class Spotter(DSP, Service):
                 info__3 = {}
                 
                 results = self.sp.playlist(p_list)
-                info__1['album_id'] = [p_list]
+                info__1['album_uri'] = [p_list]
                 info__1['album_name'] = [results['name']]
                 info__1['album_type'] = [results['type']]
                 info__1['image_src'] = [results['images'][0]['url']]
@@ -325,17 +325,17 @@ class Spotter(DSP, Service):
                 
                 else:
                     # this is one playlist
-                    info__1['track_list'] = [[t['track']['id'] for t in items]]
-                    artist_ids = [[a['id'] for a in t['track']['artists']] for t in items]
-                    info__1['artist_ids'] =  [artist_ids] if len(artist_ids) <= self.max_artists_on_album else [[various_artist_id]]
+                    info__1['track_uris'] = [[t['track']['id'] for t in items]]
+                    artist_uris = [[a['id'] for a in t['track']['artists']] for t in items]
+                    info__1['artist_uris'] =  [artist_uris] if len(artist_uris) <= self.max_artists_on_album else [[various_artist_uri]]
                     info__1['album_duration'] = [sum(t['track']['duration_ms'] for t in items)/(1000*60)]
                     info__1['release_date'] = [max(self.convert_release_date(t['track']['album']['release_date'],
                                                                              t['track']['album']['release_date_precision']) \
                                                                                  for t in items)]
-                    info__2['artist_id'] = [a['id'] for t in items for a in t['track']['artists']]
+                    info__2['artist_uri'] = [a['id'] for t in items for a in t['track']['artists']]
                     info__2['artist_name'] = [a['name'] for t in items for a in t['track']['artists']]
 
-                    info__3['album_id'] = [p_list]
+                    info__3['album_uri'] = [p_list]
                     info__3['like_date'] = [min(t['added_at'] for t in items)]
                 
                     for i_0, i__0 in zip([info_1, info_2, info_3], [info__1, info__2, info__3]):
