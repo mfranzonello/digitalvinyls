@@ -1,7 +1,7 @@
 ''' Play music '''
 
 from setup import set_up_database, set_up_user
-from music.hardware import Sonoser
+from music.hardware import Sonoser, Turntable
 
 def set_up_speakers():
     sonoser = Sonoser()
@@ -16,16 +16,10 @@ def set_up_speakers():
     
     return sonoser
 
-def play_album(neon, user, sonoser):
-    album_s = neon.get_random_album(user_id)
-
-    if album_s['service_id'] == 1:
-        print(f'Playing {album_s["artist_name"]} - {album_s["album_name"]} from Spotify')
-        #print(album_s['album_uri'])
-        sonoser.play_spotify_album(album_s['track_list'], titles=['']*len(album_s['track_list']))
-    else:
-        pass
-
+def play_album(neon, sonoser, user):
+    turntable = Turntable()
+    turntable.play_music(neon, sonoser, user)
+    
     # # print(sonoser.access_token)
     # # print(sonoser.household_id)
     # # print(sonoser.groups)
@@ -37,6 +31,6 @@ if __name__ == '__main__':
     user = set_up_user(neon, user_id)
     sonoser = set_up_speakers()
 
-    play_album(neon, user, sonoser)
+    play_album(neon, sonoser, user)
 
     quit()

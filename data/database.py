@@ -50,9 +50,13 @@ class Neon:
     ''' basic DB functions '''    
     def execute(self, sql=None, commit=True):
         self.reconnect()
-        
-        if sql:
-           self.connection.execute(text(sql))
+
+        if isinstance(sql, list):
+            for s in sql:
+                self.execute(s, commit=False)
+        elif isinstance(sql, str):
+            self.connection.execute(text(sql))
+
         if commit:
             self.connection.commit()
             
@@ -96,28 +100,24 @@ class Neon:
         return '%(' + '|'.join(self.dbify(v.lower()) for v in values) + ')%'
 
 
-    ''' table setup '''
+    ''' table and view setup '''
     def create_tables(self):
-        for sql in SQLer.create_tables():
-            self.execute(sql, commit=False)
-        self.execute()
+        self.execute(SQLer.create_tables())
             
     def drop_tables(self):
-        for sql in SQLer.drop_tables():
-            self.execute(sql, commit=False)
-        self.execute()
+        self.execute(SQLer.drop_tables())
 
-
-    ''' view setup '''                    
     def create_views(self):
-        for sql in SQLer.create_views() + SQLer.summarize_views():
-            self.execute(sql, commit=False)
-        self.execute()
+        self.execute(SQLer.create_views() + SQLer.summarize_views())
+        
+    def materialize_views(self):
+        self.execute(SQLer.materialize_views())
+    
+    def refresh_views(self):
+        self.execute(SQLer.refresh_views())
         
     def drop_views(self):
-        for sql in SQLer.drop_views():
-            self.execute(sql, commit=False)
-        self.execute()
+        self.execute(SQLer.drop_views())
 
         
     ''' update data from pull '''
@@ -229,7 +229,7 @@ class Neon:
     def get_album_comparisons(self, user_id):
         sql = (f"WITH release_categories AS "
                f"(SELECT user_id, source_id, album_uri, category "
-               f"FROM ownerships JOIN album_categories USING(source_id, album_uri) "
+               f"FROM ownerships JOIN album_categories USING (source_id, album_uri) "
                f"WHERE user_id = {user_id} AND category NOT IN ('single', 'ep', 'playlist')), "
                
                f"availabe_categories AS "
@@ -254,10 +254,10 @@ class Neon:
                f"picks AS (SELECT * FROM first_pick UNION SELECT * FROM second_pick) "
 
                f"SELECT user_id, source_id, album_uri, category, album_name, artist_names, ranking "
-               f"FROM picks JOIN albums USING(source_id, album_uri) "
-               f"JOIN ownerships USING(source_id, album_uri) JOIN sources USING(source_id) "
-               f"JOIN album_artists USING(source_id, album_uri) "
-               f"LEFT JOIN release_battles USING(user_id, source_id, album_uri) "
+               f"FROM picks JOIN albums USING (source_id, album_uri) "
+               f"JOIN ownerships USING (source_id, album_uri) JOIN sources USING (source_id) "
+               f"JOIN album_artists USING (source_id, album_uri) "
+               f"LEFT JOIN release_battles USING (user_id, source_id, album_uri) "
                f";"
                )
         albums_df = self.read_sql(sql)
@@ -282,8 +282,8 @@ class Neon:
     def get_album_to_rate(self, user_id, unrated=False):
         wheres = ' AND rating IS NULL ' if unrated else ''
         sql = (f"SELECT source_id, album_uri, artist_names, album_name, rating FROM ownerships "
-               f"JOIN albums USING(source_id, album_uri) JOIN sources USING(source_id) "
-               f"JOIN album_artists USING(source_id, album_uri) "
+               f"JOIN albums USING (source_id, album_uri) JOIN sources USING (source_id) "
+               f"JOIN album_artists USING (source_id, album_uri) "
                f"WHERE user_id = {user_id}{wheres} "
                f"ORDER BY RANDOM() LIMIT 1"
                f";"
@@ -295,10 +295,10 @@ class Neon:
         categories = ['studio', 'compilation', 'soundtrack', 'score']
         cases = ' '.join(f"WHEN '{category}' THEN {i}" for i, category in enumerate(categories)) + f' ELSE {len(categories)}'
         sql = (f"SELECT artist_names, album_name, category, ranking, rating "
-               f"FROM ownerships JOIN release_battles USING(user_id, source_id, album_uri) "
-               f"JOIN album_categories USING(source_id, album_uri) "
-               f"JOIN albums USING(source_id, album_uri) JOIN sources USING(source_id) "
-               f"JOIN album_artists USING(source_id, album_uri) "
+               f"FROM ownerships JOIN release_battles USING (user_id, source_id, album_uri) "
+               f"JOIN album_categories USING (source_id, album_uri) "
+               f"JOIN albums USING (source_id, album_uri) JOIN sources USING (source_id) "
+               f"JOIN album_artists USING (source_id, album_uri) "
                f"WHERE user_id = {user_id} AND release_battles.ranking <= {max_ranking} "
                f"ORDER BY CASE category {cases} END, ranking ASC, rating DESC "
                f";"
@@ -399,8 +399,8 @@ class Neon:
             wheres.append(f"COALESCE(release_decades, jsonb_build_array(FLOOR(EXTRACT(YEAR FROM release_date) / 10) * 10)) ? '{release_decade}'")
         if explicit is not None:
             wheres.append(f'COALESCE(explicit, FALSE) = {explicit}')
-
-        sql = f'SELECT * FROM user_albums WHERE user_id = {user_id}{wheres}'
+            
+        sql = f'SELECT * FROM user_albums WHERE user_id = {user_id}{" AND ".join(wheres)}'
         albums_df = self.read_sql(sql)
         return albums_df
     
@@ -408,5 +408,5 @@ class Neon:
                         min_duration=None, max_duration=None, explicit=None, release_year=None, release_decade=None):
         albums_df = self.get_user_albums(user_id, min_ranking, min_rating, categories,
                                          min_duration, max_duration, explicit, release_year, release_decade)
-        album_s = albums_df.sample(1)
+        album_s = albums_df.sample(1).squeeze()
         return album_s

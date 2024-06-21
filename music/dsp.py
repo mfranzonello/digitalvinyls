@@ -23,7 +23,7 @@ from common.words import Texter
 from common.secret import get_secret, get_token, save_token
 from common.locations import SPOTIFY_AUTH_URL #, SPOTIFY_REDIRECT_URI
 from common.structure import SPOTIFY_TOKENS_FOLDER, SPOTIFY_AUTHS_FOLDER, SPOTIFY_REDIRECT_URI, get_scope
-from library.stripping import RemoveWords
+from library.wordbank import RemoveWords
 
 class DSP:
     def get_albums(self, **kwargs):
@@ -159,7 +159,6 @@ class Spotter(DSP, Service):
             info__1['track_uris'] = [[track['id'] for track in item['album']['tracks']['items']] for item in items]
             info__1['album_duration'] = [sum(round(track['duration_ms']/(1000*60), 4) for track in item['album']['tracks']['items']) \
                                        for item in items]
-            ##info__1['replacement'] = ['US' not in item['album']['available_markets'] for item in items]
             info__1['upc'] = [item['album']['external_ids']['upc'] for item in items]
             info__1['release_date'] = [self.convert_release_date(item['album']['release_date'],
                                                                  item['album']['release_date_precision']) for item in items]

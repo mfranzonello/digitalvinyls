@@ -1,17 +1,21 @@
 ''' Ensure database and listener are good to go '''
 
 from data.database import Neon
-from music.users import User
+from music.listeners import User
 
-def set_up_database(drop_tables=False, drop_views=False):
+def set_up_database(drop_tables=False, drop_views=False, create_tables=False, create_views=False, materialize=False):
     neon = Neon()
     neon.connect()
     if drop_tables:
         neon.drop_tables()
-    neon.create_tables()
+    if create_tables:
+        neon.create_tables()
     if drop_views:
         neon.drop_views()
-    neon.create_views()
+    if create_views:
+        neon.create_views()
+    if materialize:
+        neon.materialize_views()
     return neon
 
 def set_up_user(neon, user_id):
@@ -21,6 +25,7 @@ def set_up_user(neon, user_id):
     return user
 
 if __name__ == '__main__':
-    set_up_database(drop_views=True)
+    # make sure all tables and views are set up
+    set_up_database(drop_tables=False, create_tables=True, drop_views=True, create_views=True, materialize=True)
     
     quit()

@@ -76,4 +76,6 @@ if __name__ == '__main__':
     update_works(neon)
     update_barcodes(neon)
     
+    neon.refresh_views()
+
     quit()

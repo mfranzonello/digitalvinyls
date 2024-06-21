@@ -13,6 +13,7 @@ from common.calling import Caller
 from common.structure import SONOS_TOKENS_FOLDER, SONOS_REDIRECT_URI
 from common.locations import SONOS_HOST, SONOS_PORT
 from common.secret import get_secret, get_token, save_token
+from common.entry import Stroker
 
 class Sonoser(Caller):
     login_url = 'https://api.sonos.com/login/v3'
@@ -62,7 +63,7 @@ class Sonoser(Caller):
     def get_households(self):
         url = f'{self.control_url}/households'
         data = {'connectedOnly': True}
-        response = requests.get(url, data=data, headers=self.get_headers())
+        response = requests.get(url, params=data, headers=self.get_headers(), timeout=10)
         if response.ok:
             household = response.json()['households'][0]
             self.household_id = household['id']
@@ -73,7 +74,7 @@ class Sonoser(Caller):
     def get_groups_and_players(self):
         url = f'{self.control_url}/households/{self.household_id}/groups'
         data = {}
-        response = requests.get(url, data=data, headers=self.get_headers())
+        response = requests.get(url, params=data, headers=self.get_headers())
         if response.ok:        
             self.groups = {g['id']: {'name': g['name'],
                                      'coordinator_id': g['coordinatorId'],
@@ -112,7 +113,7 @@ class Sonoser(Caller):
     def get_playlists(self):
         url = f'{self.control_url}/households/{self.household_id}/playlists'
         data = {}
-        response = requests.get(url, data=data, headers=self.get_headers())
+        response = requests.get(url, params=data, headers=self.get_headers())
         if response.ok:
             self.playlists = {p['id']: p['name'] for p in response.json()['playlists']}
 
@@ -185,3 +186,42 @@ class Sonoser(Caller):
             device.add_uri_to_queue(uri, meta=to_didl_string(didl))#, position=i+1, as_next=True)
         
         device.play_from_queue(0)
+
+class Turntable:
+    def __init__(self):
+        pass
+    
+    def play_music(self, neon, sonoser, user):
+        user_name = user.first_name + ' ' + user.last_name
+        user_id = user.user_id
+        print(f'Welcome {user_name}!')
+        
+        loop = True
+        while loop:
+            print(' Press [N] to play a new album or press [Q] to quit.')
+
+            loop = Stroker.get_keystroke(allowed_keys=['N'], quit_key='Q')
+            if loop:
+                self.play_album(neon, sonoser, user_id)
+                
+    def play_album(self, neon, sonoser, user_id):
+        album_s = neon.get_random_album(user_id)
+
+        artist_names, album_name = album_s[['artist_names', 'album_name']]
+        service_name, source_name, service_id, source_id = album_s[['service_name', 'source_name',
+                                                                    'service_id', 'source_id']]
+    
+        print(f'Playing {artist_names} - {album_name} from {service_name}')
+        match service_id:
+            case 1: # Spotify
+                match source_id:
+                    case 1:
+                        sonoser.play_spotify_album(album_s['track_list'], titles=['']*len(album_s['track_list'])) ## need titles
+                    case _:
+                        print(f'{source_name} is not supported yet')
+            case 2: # Soundcloud
+                print('This service type is not supported yet')
+            case 3: # Sonos
+                print('This service type is not supported yet')
+            case _:
+                print('This service type is not supported yet')

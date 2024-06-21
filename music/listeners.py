@@ -1,10 +1,10 @@
 ''' Listeners '''
 
-import keyboard
 from pandas import isna
 
 from common.words import Texter, Colors
-from library.stripping import RemoveWords
+from common.entry import Stroker
+from library.wordbank import RemoveWords
 
 class User:
     def __init__(self, user_id, first_name, last_name):
@@ -42,15 +42,8 @@ class Ranker(Texter):
                   f'{Colors.RED}[2]{Colors.END} rate albums or {Colors.YELLOW}[3]{Colors.END} see results? '
                   f'Press {Colors.GREY}[Q]{Colors.END} to quit.')
 
-            while True:
-                event = keyboard.read_event()
-                if event.event_type == keyboard.KEY_DOWN:
-                    key = event.name.upper()
-                    if key in ['1', '2', '3', 'Q']:
-                        if key == 'Q':
-                            loop = False
-                        break
-
+            key, loop = Stroker.get_keystroke(allowed_keys=['1', '2', '3'], quit_key='Q')
+            
             if key in ['1', '2']:
                 match key:
                     case '1':
@@ -61,6 +54,8 @@ class Ranker(Texter):
             if key in ['1', '2', '3']:
                 self.get_summary(neon, user_id)
 
+        # make sure to update results in the materialized views
+        neon.refresh_views()
         print(f'See you later, {user_name}!')
        
     def get_summary(self, neon, user_id):
@@ -69,6 +64,9 @@ class Ranker(Texter):
             print(f'Top {Colors.CYAN}{category}{Colors.END} releases: ')
             print(albums_df.query('category == @category')[['ranking', 'artist_names', 'album_name']])
             print('Press any key to continue...')
+            
+            key, loop = Stroker.get_keystroke()
+            
             while True:
                 event = keyboard.read_event()
                 if event.event_type == keyboard.KEY_DOWN:
@@ -99,14 +97,7 @@ class Ranker(Texter):
                       f'(currently {rank_b}{Colors.END})\n\t\t?\n' #
                       f'\nPress {Colors.GREY}[Q]{Colors.END} to return to the main menu.\n')
                                 
-                while True:
-                    event = keyboard.read_event()
-                    if event.event_type == keyboard.KEY_DOWN:
-                        key = event.name.upper()
-                        if key in ['1', '2', 'Q']:
-                            if key == 'Q':
-                                loop = False
-                            break
+                key, loop = Stroker.get_keystroke(allowed_keys=['1', '2'], quit_key='Q')
                         
                 if key in ['1', '2']:
                     print('...updating ranks...')
@@ -116,92 +107,7 @@ class Ranker(Texter):
                                        
             else:
                 loop = False
-            
-    # # def rank_albums_2(self, neon, user_id):
-    # #     loop = True
-        
-    # #     # get albums to rank
-    # #     print('...pulling up albums to compare...\n')
-    # #     albums_df, summary_df = neon.get_albums_to_compare(user_id)
-    # #     if not albums_df.empty:
-    # #         # user has albums to compare in this category
-    # #         artist_name_a, album_name_a, ranking_a = albums_df.iloc[0][['artist_name', 'album_name', 'ranking']]
-    # #         artist_name_b, album_name_b, ranking_b = albums_df.iloc[1][['artist_name', 'album_name', 'ranking']]
-    # #         category = albums_df.iloc[0]['category']
-    # #         total = summary_df.query('category == @category')['ranked'].sum()
-
-    # #         rank_a = f'#{ranking_a:.0f} of {total}' if not isna(ranking_a) else 'unranked'
-    # #         rank_b = f'#{ranking_b:.0f} of {total}' if not isna(ranking_b) else 'unranked'
-
-    # #         print(f'Which {category} do you like better,\n'
-    # #               f'\t{Colors.BLUE}[1]{Colors.END} {artist_name_a} - {album_name_a} \n\t\tor\n' #(currently {rank_a})
-    # #               f'\t{Colors.RED}[2]{Colors.END} {artist_name_b} - {album_name_b} \n\t\t?\n' #(currently {rank_b})
-    # #               f'\nPress {Colors.GREY}[Q]{Colors.END} to return to the main menu.\n')
-                                
-    # #         while True:
-    # #             event = keyboard.read_event()
-    # #             if event.event_type == keyboard.KEY_DOWN:
-    # #                 key = event.name.upper()
-    # #                 if key in ['1', '2', 'Q']:
-    # #                     if key == 'Q':
-    # #                         loop = False
-    # #                     break
-                        
-    # #         if key in ['1', '2']:
-    # #             print('...updating ranks...')
-                    
-    # #             ranking = None
-    # #             if isna(ranking_b) and (key == '1'):
-    # #                 # second is added to the list
-    # #                 i = 2
-    # #                 ranking = total + 1
-
-    # #             elif isna(ranking_b) and (key == '2'):
-    # #                 # second is moved ahead on the list
-    # #                 i = 2
-    # #                 ranking = ranking_a
-
-    # #             elif isna(ranking_a) and (key == '1'):
-    # #                 # first is moved ahead on the list
-    # #                 i = 1
-    # #                 ranking = ranking_b
-
-    # #             elif isna(ranking_a) and (key == '2'):
-    # #                 # first is added to the list
-    # #                 i = 1
-    # #                 ranking = total + 1
-
-    # #             elif (ranking_a > ranking_b) and (key == '1'):
-    # #                 # no movement
-    # #                 pass
-
-    # #             elif (ranking_a > ranking_b) and (key == '2'):
-    # #                 # second is moved ahead on the list
-    # #                 i = 2
-    # #                 ranking = ranking_a
-                        
-    # #             elif (ranking_a < ranking_b) and (key == '1'):
-    # #                 # first is moved ahead on the list
-    # #                 i = 1
-    # #                 ranking = ranking_b
-                    
-    # #             elif (ranking_a < ranking_b) and (key == '2'):
-    # #                 # no movement
-    # #                 pass
-                    
-    # #             if ranking:
-    # #                 source_id, album_uri = albums_df.loc[i-1][['source_id', 'album_uri']]
-    # #                 neon.update_album_rank(user_id, source_id, album_uri, category, ranking)
-                    
-    # #             for i in [0, 1]:
-    # #                 album_s = albums_df.iloc[i]
-    # #                 self.rate_album(neon, user_id, album_s)
-                                       
-    # #     else:
-    # #         loop = False
-                        
-    # #     return loop
-    
+               
     def rate_albums(self, neon, user_id):
         loop = True
         while loop:
@@ -227,16 +133,10 @@ class Ranker(Texter):
         print(f'How would you rate {artist_names} - {album_name}? Choose {print_ratings} '
               f'or ENTER to leave {asis}{Colors.END}. Press [Q] to return to the main menu.')
         
-        while True:
-            event = keyboard.read_event()
-            if event.event_type == keyboard.KEY_DOWN:
-                key = event.name.upper()
-                if key in [str(r + 1) for r in range(10)] + ['ENTER'] + ['Q']:
-                    break
-                
-        if (key not in ['ENTER', 'Q']) and (key != current_rating):
+        key, loop = Stroker.get_keystroke(allowed_keys=[str(r + 1) for r in range(10)] + ['ENTER'], quit_key='Q')            
+        if loop and (key not in ['ENTER', current_rating]):
             rating = ratings.index(key) + 1
             print(f'...updating rating to {rating}...')
             neon.update_album_rating(user_id, source_id, album_uri, rating)
 
-        return key != 'Q'
+        return loop
