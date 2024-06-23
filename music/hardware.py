@@ -189,7 +189,7 @@ class Sonoser(Caller):
 
 class Turntable:
     def __init__(self):
-        pass
+        self.previous_album = None
     
     def play_music(self, neon, sonoser, user):
         user_name = user.first_name + ' ' + user.last_name

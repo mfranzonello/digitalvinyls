@@ -159,6 +159,17 @@ class Neon:
             # #        f';'
             # #        )
             # # self.execute(sql)
+
+    def update_data_updates(self, table_name, start_date=None, end_date=None):
+        sql = (f"INSERT INTO _data_updates (table_name, start_date, end_date) "
+               f"VALUES ('{table_name}', {self.dbify(start_date)}, {self.dbify(end_date)}) "
+               f"ON CONFLICT (table_name) DO UPDATE SET "
+               f"start_date = LEAST(_data_updates.start_date, EXCLUDED.start_date), "
+               f"end_date = GREATEST(_data_updates.end_date, EXCLUDED.end_date) "
+               f"WHERE _data_updates.table_name = '{table_name}' "
+               f";"
+               )
+        self.execute(sql)
             
     def update_artists(self, artists_df, service_id):
         columns = ['artist_uri', 'artist_name']
@@ -195,15 +206,20 @@ class Neon:
         columns = ['upc', 'release_type']
         self.update_service_table(albums_df, 'barcodes', columns, ['upc'])
 
+    def update_billboard(self, peaks_df, start_date, end_date):
+        columns = ['credit_names', 'album_name', 'peak_position']
+        self.update_service_table(peaks_df, 'billboard', columns, ['credit_names', 'album_name'])
+        self.update_data_updates('billboard', start_date, end_date)
+
     def update_user(self, user):
         columns = ['user_id', 'first_name', 'last_name', 'service_user_ids', 'image_src']
         self.update_service_table(user, 'users', columns, ['user_id'])
         
     # # def update_series(self, user_id, series_name, artist_uri=None, artist_name=None, album_name_pattern=None, album_not_pattern=None):
     # #     artist_yes = f'artist_uris ? {self.dbify(artist_uri)}' if artist_uri else None
-    # #     artist_maybe = f'LOWER(artist_names) SIMILAR TO {self.regify(album_name_pattern)}' if artist_name else None
-    # #     album_yes = f'LOWER(album_names) SIMILAR TO {self.regify(album_name_pattern)}' if album_name_pattern else None
-    # #     album_no = f'LOWER(album_name) NOT SIMILAR TO {self.regify(album_not_pattern)}' if album_name_pattern else None
+    # #     artist_maybe = f'lower(artist_names) SIMILAR TO {self.regify(album_name_pattern)}' if artist_name else None
+    # #     album_yes = f'lower(album_names) SIMILAR TO {self.regify(album_name_pattern)}' if album_name_pattern else None
+    # #     album_no = f'lower(album_name) NOT SIMILAR TO {self.regify(album_not_pattern)}' if album_name_pattern else None
         
     # #     sql = (f'WITH new_series AS (SELECT jsonb_agg(row_data) AS album_list '
     # #            f'FROM (SELECT jsonb_build_array(source_id, album_uri) AS row_data '
@@ -334,6 +350,18 @@ class Neon:
         updates_df = self.read_sql(sql)
         return updates_df
     
+    def get_data_updates(self, table_name):
+        sql = (f"SELECT start_date, end_date FROM _data_updates "
+               f"WHERE table_name = '{table_name}' "
+               f";"
+               )
+        data_updates_df = self.read_sql(sql)
+        if len(data_updates_df):
+            start_date, end_date = data_updates_df.iloc[0][['start_date', 'end_date']]
+        else:
+            start_date = end_date = None
+        return start_date, end_date
+    
     def get_tracks_to_update(self, service_id):
         tracks_df = self.get_table_to_update('tracks', service_id=service_id)
         return tracks_df
@@ -361,6 +389,10 @@ class Neon:
     def get_barcodes_to_update(self):
         tracks_df = self.get_table_to_update('barcodes', limit=300)
         return tracks_df
+    
+    def get_billboard_to_update(self):
+        start_date, end_date = self.get_data_updates('billboard')
+        return start_date, end_date
 
     def get_user_ids(self):
         sql = (f'SELECT user_id FROM users;')
@@ -388,11 +420,11 @@ class Neon:
             wheres.append(f'category IN ({cats})')
         if min_duration or max_duration:
             if min_duration and not max_duration:
-                wheres.append(f'duration >= {min_duration}')
+                wheres.append(f'play_duration >= {min_duration}')
             elif max_duration and not min_duration:
-                wheres.append(f'duration <= {max_duration}')
+                wheres.append(f'play_duration <= {max_duration}')
             else:
-                wheres.append(f'duration BETWEEN {min_duration} AND {max_duration}')
+                wheres.append(f'play_duration BETWEEN {min_duration} AND {max_duration}')
         if release_year:
             wheres.append(f'EXTRACT(YEAR FROM release_date) = {release_year}')
         elif release_decade:

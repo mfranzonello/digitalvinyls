@@ -67,11 +67,6 @@ class Ranker(Texter):
             
             key, loop = Stroker.get_keystroke()
             
-            while True:
-                event = keyboard.read_event()
-                if event.event_type == keyboard.KEY_DOWN:
-                    break
-            
     def rank_albums(self, neon, user_id):
         loop = True
         while loop:

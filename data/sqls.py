@@ -119,6 +119,29 @@ class SQLer:
                            ],
                'pk': ['iswc'],
                },
+              {'name': 'billboard',
+               'columns': [['album_title', 'varchar'],
+                           ['credit_names', 'varchar'],
+                           ['peak_position', 'integer'],
+                           ],
+               'pk': ['album_title', 'credit_names'],
+               },
+              {'name': 'critics',
+               'columns': [['critic_name', 'varchar'],
+                           ['list_year', 'integer'],
+                           ['list_type', 'varchar'], #all_time, annual
+                           ['position', 'int'],
+                           ['artist_name', 'varchar'],
+                           ['album_name', 'varchar'],
+                           ],
+               'pk': ['critic_name', 'list_year', 'position'],            
+               },
+              {'name': '_data_updates',
+               'columns': [['table_name', 'varchar'],
+                           ['start_date', 'date'],
+                           ['end_date', 'date'],
+                           ],
+               },
               ]
   
     views = [{'name': 'compilations',
@@ -163,7 +186,7 @@ class SQLer:
                       f"JOIN tracks ON sources.service_id = tracks.service_id AND albums.track_uris ? tracks.track_uri "
                       f"GROUP BY source_id, album_uri), "
                
-                      f"release_years AS (SELECT source_id, album_uri, MAX(release_year) - MIN(release_year) AS release_span FROM albums "
+                      f"release_years AS (SELECT source_id, album_uri, max(release_year) - min(release_year) AS release_span FROM albums "
                       f"JOIN sources USING (source_id) JOIN tracks ON sources.service_id = tracks.service_id AND albums.track_uris ? tracks.track_uri "
                       f"JOIN recordings USING (isrc) JOIN works USING (iswc) "
                       f"GROUP BY source_id, album_uri) "
@@ -171,7 +194,7 @@ class SQLer:
                       f"SELECT source_id, album_uri, "
                       f"CASE WHEN album_type = 'single' AND jsonb_array_length(track_uris) >= min_ep_tracks THEN 'ep' "
                       f"WHEN album_type in ('album', 'compilation') THEN "
-                      f"(CASE WHEN LOWER(album_name) SIMILAR TO soundtrack_words OR release_type = 'soundtrack' THEN "
+                      f"(CASE WHEN lower(album_name) SIMILAR TO soundtrack_words OR release_type = 'soundtrack' THEN "
                       f"(CASE WHEN instrumentalness >= min_instrumentalness THEN 'score' ELSE 'soundtrack' END) "
                       f"WHEN release_type = 'compilation' AND release_span >= min_release_span THEN 'compilation' "
                       f"WHEN album_type = 'album' THEN 'studio' ELSE album_type END) ELSE album_type END AS category "
@@ -214,7 +237,9 @@ class SQLer:
                       f"FROM albums, jsonb_array_elements_text(track_uris) WITH ORDINALITY AS elems(track_uri, ord) "
                       f"EXCEPT SELECT source_id, album_uri, track_uri, 0 FROM auto_skips) "
                       
-                      f"SELECT source_id, album_uri, jsonb_agg(track_uri ORDER BY ord) AS track_list FROM played_tracks " #jsonb_build_array(source_id, track_uri)
+                      f"SELECT source_id, album_uri, jsonb_agg(track_uri ORDER BY ord) AS track_list, "
+                      f"SUM(track_duration) AS play_duration "
+                      f"FROM played_tracks JOIN sources USING (source_id) JOIN tracks USING (service_id, track_uri) "
                       f"GROUP BY source_id, album_uri "
                       ),
               },
@@ -317,7 +342,7 @@ class SQLer:
                
                       f"upcs AS (SELECT albums.upc FROM albums, regex_soundtrack "
                       f"WHERE albums.album_type not in ('single', 'ep', 'playlist') AND albums.upc IS NOT NULL "
-                      f"AND LOWER(albums.album_name) NOT SIMILAR TO soundtrack_words "
+                      f"AND lower(albums.album_name) NOT SIMILAR TO soundtrack_words "
                       f"EXCEPT SELECT upc FROM barcodes UNION SELECT upc FROM barcodes WHERE release_type IS NULL) "
                
                       f"SELECT upcs.upc, artists.artist_name, albums.album_name, albums.release_date FROM upcs "
@@ -333,8 +358,8 @@ class SQLer:
                      'sql': (f"SELECT first_name || ' ' || last_name AS user_name, "
                              f"artist_names, album_name, category, "
                              f"release_date, COALESCE(release_decades, jsonb_build_array(FLOOR(EXTRACT(YEAR FROM release_date) / 10) * 10)) AS release_decades, "
-                             f"ranking, rating, "
-                             f"track_list, album_duration, COALESCE(explicit, FALSE) AS explicit, "
+                             f"ranking, rating, peak_position, "
+                             f"track_list, COALESCE(play_duration, album_duration) AS play_duration, COALESCE(explicit, FALSE) AS explicit, "
                              f"service_name, source_name, "
                              f"user_id, service_id, source_id, album_uri "
                              f"FROM ownerships JOIN sources USING (source_id) JOIN users USING (user_id) "
@@ -343,6 +368,13 @@ class SQLer:
                              f"LEFT JOIN release_battles USING (user_id, source_id, album_uri) "
                              f"LEFT JOIN track_lists USING (source_id, album_uri) LEFT JOIN explicit_albums USING (source_id, album_uri) "
                              f"LEFT JOIN compilations USING (source_id, album_uri) "
+                             f"LEFT JOIN billboard ON "
+                             f"(CASE WHEN album_artists.artist_names ~* '\s+(and|&|/)\s+' THEN regexp_replace(regexp_replace(lower(album_artists.artist_names), "
+                             f"'\s+&\s+|\s+and\s+|\s+/\s+', '; ', 'g'), ',\s*', '; ', 'g') "
+                             f"ELSE album_artists.artist_names END, regexp_replace(lower(albums.album_name), '\s+/\s+', '/', 'g')) "
+                             f"= (CASE WHEN billboard.credit_names ~* '\s+(and|&|/)\s+' THEN regexp_replace(regexp_replace(lower(billboard.credit_names), "
+                             f"'\s+&\s+|\s+and\s+|\s+/\s+', '; ', 'g'), ',\s*', '; ', 'g') "
+                             f"ELSE billboard.credit_names END, regexp_replace(lower(billboard.album_title), '\s+/\s+', '/', 'g')) "
                              ),
                      },
                     ] 
@@ -373,7 +405,7 @@ class SQLer:
         sqls = []
         for table in SQLer.tables:
             cols_add = ', '.join(f'{c} {t}' for c, t in table['columns'])
-            pk_add = ', ' + SQLer.create_primary_key(table['pk']) if table['pk'] else ''
+            pk_add = ', ' + SQLer.create_primary_key(table['pk']) if table.get('pk') else ''
             fk_add = ', ' + ', '.join(SQLer.create_foreign_key([fk, t]) for fk, t in table['fks']) if table.get('fks') else ''
             sql = (f'CREATE TABLE IF NOT EXISTS {table["name"]} '
                    f'({cols_add} {pk_add} {fk_add})'
@@ -405,7 +437,7 @@ class SQLer:
             sqls.extend([sql_1, sql_2])
         return sqls
 
-    def refresh_views(view_name):
+    def refresh_views():
         sqls = []
         for view in SQLer.materialized:
             sql = f'REFRESH MATERIALIZED VIEW {view["name"]};'

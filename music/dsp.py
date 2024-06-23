@@ -1,10 +1,13 @@
 ''' Streaming music sources and libaries '''
 
 from math import ceil
-from datetime import datetime
+from datetime import datetime, timedelta
 from base64 import b64encode, urlsafe_b64encode
 from time import sleep
 from urllib import parse
+import itertools
+import statistics
+from collections import Counter
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -17,6 +20,7 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from billboard import ChartData
 
 from common.calling import Caller, Printer
 from common.words import Texter
@@ -36,6 +40,9 @@ class DSP:
         return None, None, None
 
 class Service(Printer, Caller):
+    name = None
+    
+    api_rate_limit = 1
     def __init__(self):
         Printer.__init__(self)
         Caller.__init__(self)
@@ -45,10 +52,17 @@ class Service(Printer, Caller):
 
     def disconnect(self):
         pass
+    
+    def sleep(self):
+        sleep(1/self.api_rate_limit)
+
 
 class Spotter(DSP, Service):
+    name = 'Spotify'
+    
     login_url = 'https://accounts.spotify.com/api'
     api_limit = 50 #100
+    api_rate_limit = 3 # calls per second
     
     vinyl_word = 'vinyl'
     max_artists_on_album = 4
@@ -131,6 +145,7 @@ class Spotter(DSP, Service):
         self.sp = Spotify(client_credentials_manager=client_credentials_manager,
                           auth_manager=auth_manager)
         
+    ''' extract saved albums '''
     def get_albums(self):
         print('getting albums data')
         total = None
@@ -144,6 +159,7 @@ class Spotter(DSP, Service):
         self.show_progress(offset, total)
         while total is None or offset < total:
             results = self.sp.current_user_saved_albums(limit=50, offset=offset)
+            self.sleep(1/self.api_rate_limit)
             info__1 = {}
             info__2 = {}
             info__3 = {}
@@ -181,7 +197,201 @@ class Spotter(DSP, Service):
         ownerships_df = DataFrame(info_3)
         
         return albums_df, artists_df, ownerships_df
-               
+    
+    # # def get_albums_info(self):
+    # #     return albums_df, artists_df, ownerships_df
+    
+    ''' extract saved playlists '''
+    def get_playlists(self, various_artist_uri=None):
+        albums_df, artists_df, ownerships_df = self.get_playlists_data(various_artist_uri)
+        
+        return albums_df, artists_df, ownerships_df
+        
+    def get_favorites(self, various_artist_uri=None):
+        pass
+        
+        #return albums_df, artists_df, ownerships_df
+        
+    def get_playlists_data(self, various_artist_uri=None):
+        print('getting playlists data')
+        total = None
+        offset = 0
+        
+        # set up placeholders for results
+        possible_lists = []
+        
+        self.show_progress(offset, total)
+        while total is None or offset < total:
+            results = self.sp.current_user_playlists(limit=50, offset=offset)
+            self.sleep()
+            
+            total = results['total']
+            items = results['items']
+
+            possible_lists += [(p['id'], count) for p in items if (count:=self.is_vinyl_playlist(p['name']))]
+            
+            offset += len(items)
+            self.show_progress(offset, total)
+            
+        if len(possible_lists):
+            albums_df, artists_df, ownerships_df = self.get_playlist_info(self, possible_lists, various_artist_uri)
+                
+        return albums_df, artists_df, ownerships_df
+    
+    def get_playlist_info(self, possible_lists, various_artist_uri):
+        info_1 = {}
+        info_2 = {}
+        info_3 = {}
+        for p_list, count in possible_lists:
+            info__1 = {}
+            info__2 = {}
+            info__3 = {}
+                
+            results = self.sp.playlist(p_list)
+            self.sleep()
+            
+            p_uri = p_list
+            p_name = results['name']
+            p_type = results['type']
+            p_image_src = [results['images'][0]['url']]
+                
+            total = None
+            offset = 0
+            all_items = []
+            while total is None or offset < total:
+                results = self.sp.playlist_items(p_list, limit=50, offset=offset)                
+                self.sleep()
+            
+                total = results['total']
+                all_items.extend(results['items'])
+
+                offset += len(items)
+                            
+            if (count == 'single') and (len(all_items) > self.max_tracks_album_playlist):
+                # this is not an acceptible configuration
+                index_splits = None
+                
+            elif count == 'multiple':
+                # this is multiple albums on one playlist
+                album_uris = [t['track']['album']['id'] for t in all_items]
+                index_splits = self.split_by_uri(album_uris)
+                    
+            else:
+                # this is one playlist
+                index_splits = (0, len(album_uris))
+                
+            if index_splits:
+                for i, split in enumerate(index_splits):
+                    items = all_items[split[0]:split[1]]
+                    
+                    match count:
+                        case 'multiple':
+                            album_uri = f'{p_uri}|{i}'
+                            album_uris = [t['track']['album']['id'] for t in items]
+                            dominant_idx = self.group_by_uri(album_uris)
+                            if dominant_idx:
+                                # this is from one album
+                                main_album = items[dominant_idx]['track']['album']
+                                album_name = main_album['name']
+                                album_type = main_album['type']
+                                image_src = main_album['images'][0]['url']
+                                upc = None #main_album[]
+                            else:
+                                # this is from multiple albums
+                                album_name = 'Unknown Album'
+                                album_type = p_type
+                                image_src = p_image_src
+                                upc = None
+                            
+                        case 'single':
+                            album_uri = p_uri
+                            album_name = p_name
+                            album_type = p_type
+                            image_src = p_image_src
+                            upc = None
+                            
+                    # albums
+                    info__1['album_uri'] = [album_uri]
+                    info__1['album_name'] = [album_name]
+                    info__1['album_type'] = [album_type]
+                    info__1['upc'] = [upc]
+                    info__1['image_src'] = [image_src]
+                                
+                    info__1['track_uris'] = [[t['track']['id'] for t in items]]
+                    artist_uris = [[a['id'] for a in t['track']['artists']] for t in items]
+                    info__1['artist_uris'] =  [artist_uris] if len(artist_uris) <= self.max_artists_on_album else [[various_artist_uri]]
+                    info__1['album_duration'] = [sum(t['track']['duration_ms'] for t in items)/(1000*60)]
+                    info__1['release_date'] = [max(self.convert_release_date(t['track']['album']['release_date'],
+                                                                             t['track']['album']['release_date_precision']) \
+                                                                                    for t in items)]
+                    
+                    # artists
+                    info__2['artist_uri'] = [a['id'] for t in items for a in t['track']['artists']]
+                    info__2['artist_name'] = [a['name'] for t in items for a in t['track']['artists']]
+
+                    # ownerships
+                    info__3['album_uri'] = [album_uri]
+                    info__3['like_date'] = [min(t['added_at'] for t in items)]
+                
+                    for i_0, i__0 in zip([info_1, info_2, info_3], [info__1, info__2, info__3]):
+                        for key in i__0.keys():
+                            i_0[key] = i_0.get(key, []) + i__0[key]
+                                                                        
+        albums_df = DataFrame(info_1)
+        artists_df = DataFrame(info_2).drop_duplicates()
+        ownerships_df = DataFrame(info_3)
+
+        return albums_df, artists_df, ownerships_df
+    
+    def is_vinyl_playlist(self, playlist_name):
+        if self.vinyl_word.lower() in playlist_name.lower():
+            if self.vinyl_word.lower() + 's' in playlist_name.lower():
+                is_vinyl = 'multiple'
+            else:
+                is_vinyl = 'single'
+        else:
+            is_vinyl = False
+        return is_vinyl
+    
+    def split_by_uri(self, uris, consecutive=4):
+        index_splits = []
+        current_sublist = []
+        start_idx = 0
+    
+        for _, group in itertools.groupby(uris):
+            group_list = list(group)
+            end_idx = start_idx + len(group_list) - 1
+        
+            if len(group_list) >= consecutive:
+                if current_sublist:
+                    index_splits.append((current_sublist[0], current_sublist[-1]))
+                    current_sublist = []
+                index_splits.append((start_idx, end_idx))
+            else:
+                current_sublist.extend(range(start_idx, end_idx + 1))
+        
+            start_idx = end_idx + 1
+    
+        if current_sublist:
+            index_splits.append((current_sublist[0], current_sublist[-1]))
+    
+        return index_splits
+
+    def group_by_uri(self, uris):
+        # check to see if there is a dominant uri or if they're individuals
+        # find the mode
+        mode_uri = statistics.mode(uris)
+
+        # count occurrences using Counter
+        counter = Counter(uris)
+        if counter[mode_uri]/len(uris) > 0.5:
+            uri_idx = uris.index(mode_uri)
+        else:
+            uri_idx = None
+            
+        return uri_idx
+
+    ''' extract other fields '''
     def get_tracks_data(self, tracks_df):
         print('getting track data')
         tracks_df = self.get_tracks_info(tracks_df['track_uri'].to_list())
@@ -198,6 +408,8 @@ class Spotter(DSP, Service):
             info__0 = {}
             
             results = self.sp.tracks(track_uris__0)
+            self.sleep()
+            
             info__0['track_uri'] = track_uris__0  
             info__0['track_name'] = [t['name'] for t in results['tracks']]
             info__0['artist_uris'] = [[a['id'] for a in t['artists']] for t in results['tracks']]
@@ -228,6 +440,8 @@ class Spotter(DSP, Service):
             info__0 = {}
             
             results = self.sp.audio_features(track_uris__0)
+            self.sleep()
+            
             info__0['track_uri'] = track_uris__0
             info__0['instrumentalness'] = [t['instrumentalness'] if t else 0 for t in results]
             
@@ -255,6 +469,8 @@ class Spotter(DSP, Service):
             info__0 = {}
             
             results = self.sp.artists(artist_uris__0)
+            self.sleep()
+            
             info__0['artist_uri'] = artist_uris__0
             info__0['artist_name'] = [a['name'] for a in results['artists']]
             info__0['genres'] = [a['genres'] for a in results['artists']]
@@ -278,77 +494,11 @@ class Spotter(DSP, Service):
         release_date = datetime.strptime(r_date, date_format)
         
         return release_date
-    
-    def get_playlists(self, various_artist_uri=None):
-        print('getting playlists data')
-        total = None
-        offset = 0
         
-        # set up placeholders for results
-        possible_lists = []
-        
-        self.show_progress(offset, total)
-        while total is None or offset < total:
-            results = self.sp.current_user_playlists(limit=50, offset=offset)
-            
-            total = results['total']
-            items = results['items']
-
-            possible_lists += [p['id'] for p in items if self.vinyl_word.lower() in p['name'].lower()]
-            
-            offset += len(items)
-            self.show_progress(offset, total)
-            
-        if len(possible_lists):
-            info_1 = {}
-            info_2 = {}
-            info_3 = {}
-            for p_list in possible_lists:
-                info__1 = {}
-                info__2 = {}
-                info__3 = {}
-                
-                results = self.sp.playlist(p_list)
-                info__1['album_uri'] = [p_list]
-                info__1['album_name'] = [results['name']]
-                info__1['album_type'] = [results['type']]
-                info__1['image_src'] = [results['images'][0]['url']]
-                info__1['replacement'] = [False]
-                info__1['upc'] = [None]
-                
-                results = self.sp.playlist_items(p_list)
-                items = results['items']
-                if len(items) > self.max_tracks_album_playlist:
-                    # this is multiple albums on one playlist
-                    pass
-                
-                else:
-                    # this is one playlist
-                    info__1['track_uris'] = [[t['track']['id'] for t in items]]
-                    artist_uris = [[a['id'] for a in t['track']['artists']] for t in items]
-                    info__1['artist_uris'] =  [artist_uris] if len(artist_uris) <= self.max_artists_on_album else [[various_artist_uri]]
-                    info__1['album_duration'] = [sum(t['track']['duration_ms'] for t in items)/(1000*60)]
-                    info__1['release_date'] = [max(self.convert_release_date(t['track']['album']['release_date'],
-                                                                             t['track']['album']['release_date_precision']) \
-                                                                                 for t in items)]
-                    info__2['artist_uri'] = [a['id'] for t in items for a in t['track']['artists']]
-                    info__2['artist_name'] = [a['name'] for t in items for a in t['track']['artists']]
-
-                    info__3['album_uri'] = [p_list]
-                    info__3['like_date'] = [min(t['added_at'] for t in items)]
-                
-                    for i_0, i__0 in zip([info_1, info_2, info_3], [info__1, info__2, info__3]):
-                        for key in i__0.keys():
-                            i_0[key] = i_0.get(key, []) + i__0[key]
-                                                                        
-        albums_df = DataFrame(info_1)
-        artists_df = DataFrame(info_2).drop_duplicates()
-        ownerships_df = DataFrame(info_3)
-                
-        return albums_df, artists_df, ownerships_df
-    
 
 class Sounder(DSP, Service):
+    name = 'SoundCloud'
+    
     def __init__(self):
         super().__init__()
         self.username = None
@@ -395,6 +545,8 @@ class Sounder(DSP, Service):
         
 
 class MusicBrainer(Service, Texter):
+    name = 'MusicBrainz'
+    
     url = 'https://musicbrainz.org/ws/2' ## should pull from locations.py
     data = {'fmt': 'json'}
     api_rate_limit = 1 # calls per second
@@ -415,7 +567,7 @@ class MusicBrainer(Service, Texter):
     def call_mb(self, term, query):
         try:
             response = requests.get(f'{self.url}/{term}', params=dict({'query': query}, **self.data), timeout=10)
-            sleep(1 / self.api_rate_limit)
+            self.sleep()
             if response.ok:
                 return response
             else:
@@ -425,7 +577,7 @@ class MusicBrainer(Service, Texter):
         except requests.exceptions.RequestException as e:
             print(f'Request failed: {e}')
             return self.no_response()
-
+        
     def get_recordings_data(self, tracks_df):
         print('getting recordings data')
         tracks_df = self.get_recordings_info(tracks_df['isrc'].to_list())
@@ -610,7 +762,47 @@ class MusicBrainer(Service, Texter):
             aliases = [artist['name'] for artist in response.json()['artists'] if artist['name'] != artist_name]
             
         return aliases
-        
-Services = {'Spotify': Spotter,
-            'SoundCloud': Sounder,
-            }
+    
+
+class BBer(Service):
+    name = 'Billboard'
+    
+    chart_start = datetime(1963, 1, 5) # the first Billboard 200 chart
+    def __init__(self):
+        super().__init__()
+        self.api_rate_limit = 3
+           
+    def get_billboard_albums(self, start_date, end_date, limit=500):
+        restrictions = start_date and end_date
+        i_range = range((datetime.today() - self.chart_start).days // 7 + 1)
+        chart_range = [(self.chart_start + timedelta(days=i*7)) for i in i_range]
+        date_range = [d.strftime('%Y-%m-%d') for d in chart_range if (not restrictions) or not (start_date <= d.date() <= end_date)]        
+        if limit:
+            date_range = date_range[-limit:]
+                                                                        
+        chart_data = []
+        total_weeks = len(date_range)
+        for c, chart_date in enumerate(date_range):
+            self.show_progress(c, total_weeks, message=f'Billboard 200 for {chart_date}')
+            chart = ChartData('billboard-200', date=chart_date)
+            self.sleep()
+            for i in range(200):
+                chart_data.append([chart.date, chart[i].peakPos, chart[i].artist, self.strip_title(chart[i].title)])
+        self.show_progress(total_weeks, total_weeks)
+                
+        charts_df = DataFrame(chart_data, columns=['week', 'peak_position', 'credit_names', 'album_title'])
+        return charts_df
+    
+    def get_peak_positions(self, charts_df):
+        peaks_df = charts_df.groupby(['credit_names', 'album_title'])[['peak_position']].min().reset_index()
+        start_date = charts_df['week'].min()
+        end_date = charts_df['week'].max()
+        return peaks_df, start_date, end_date
+    
+    def strip_title(self, title):
+        add_ons = ['soundtrack', 'ep']
+        for add_on in add_ons:
+            add = f'({add_on})'
+            if title.lower()[-len(add):] == add:
+                title = title[:-len(' ' + add)]
+        return title
