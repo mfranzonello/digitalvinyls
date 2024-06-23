@@ -774,7 +774,7 @@ class BBer(Service):
         super().__init__()
         self.api_rate_limit = 3
            
-    def get_billboard_albums(self, start_date, end_date, limit=500):
+    def get_billboard_albums(self, start_date, end_date, limit=100):
         restrictions = start_date and end_date
         i_range = range((datetime.today() - self.chart_start).days // 7 + 1)
         chart_range = [(self.chart_start + timedelta(days=i*7)) for i in i_range]

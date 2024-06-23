@@ -299,66 +299,117 @@ class SQLer:
                       f"FROM wilson JOIN album_categories USING (source_id, album_uri) "
                       ),
               },
-             {'name': 'update_tracks',
-              'sql': (f"SELECT sources.service_id, jsonb_array_elements_text(albums.track_uris) AS track_uri FROM albums "
-                      f"JOIN sources USING (source_id) "
-                      f"EXCEPT SELECT service_id, track_uri FROM tracks WHERE "
-                      f"(track_name IS NOT NULL AND explicit IS NOT NULL) "
+             {'name': 'critic_stars',
+              'sql': (f"WITH critic_lists AS (SELECT DISTINCT critic_name, list_year FROM critics), "
+                      f"weights AS (SELECT critic_name, 1/count(list_year)::numeric AS scaling FROM critic_lists "
+                      f"GROUP BY critic_name), "
+                      
+                      f"list_size AS (SELECT phrase::numeric AS max_points FROM keywords WHERE keyword = 'max_critics_points'), "
+                      
+                      f"star_size AS (SELECT phrase::numeric AS max_stars FROM keywords WHERE keyword = 'max_stars'), "
+                      
+                      f"total_points AS (SELECT album_name, artist_names, "
+                      f"sum(scaling * (max_points - list_position + 1)) AS points "
+                      f"FROM critics JOIN weights USING(critic_name), list_size "
+                      f"GROUP BY album_name, artist_names) "
+                      
+                      f"SELECT album_name, artist_names, "
+                      f"round((percent_rank() OVER (ORDER BY points) * (max_stars - 1)) + 1)  AS stars "
+                      f"FROM total_points, star_size"
+                      f";"
                       ),
               },
-             {'name': 'update_recordings',
-              'sql': (f"SELECT tracks.isrc FROM albums JOIN sources ON albums.source_id = sources.source_id "
-                      f"JOIN tracks ON sources.service_id = tracks.service_id AND albums.track_uris ? tracks.track_uri "
-                      f"LEFT JOIN barcodes USING (upc) "
-                      f"WHERE albums.album_type = 'compilation' OR barcodes.release_type = 'compilation' "
-                      f"EXCEPT SELECT isrc FROM recordings "# WHERE iswc IS NOT NULL "
+             {'name': 'chart_peaks',
+              'sql': (f"SELECT source_id, album_uri, peak_position FROM albums JOIN album_artists USING (source_id, album_uri) "
+                      f"JOIN billboard ON "
+                      f"(CASE WHEN album_artists.artist_names ~* '\s+(and|&|/)\s+' "
+                      f"THEN regexp_replace(regexp_replace(lower(album_artists.artist_names), "
+                      f"'\s+&\s+|\s+and\s+|\s+/\s+', '; ', 'g'), ',\s*', '; ', 'g') "
+                      f"ELSE album_artists.artist_names END, "
+                      f"regexp_replace(lower(albums.album_name), '\s+/\s+', '/', 'g')) "
+                      f"= (CASE WHEN billboard.credit_names ~* '\s+(and|&|/)\s+' "
+                      f"THEN regexp_replace(regexp_replace(lower(billboard.credit_names), "
+                      f"'\s+&\s+|\s+and\s+|\s+/\s+', '; ', 'g'), ',\s*', '; ', 'g') "
+                      f"ELSE billboard.credit_names END, "
+                      f"regexp_replace(lower(billboard.album_title), '\s+/\s+', '/', 'g')) "
+                      f";"
                       ),
               },
-             {'name': 'update_works',
-              'sql': (f"SELECT iswc FROM recordings WHERE iswc IS NOT NULL "
-                      f"EXCEPT SELECT iswc FROM works "#"WHERE release_year IS NOT NULL "
-                      ),
-              },
-             {'name': 'update_artists',
-              'sql': (f"SELECT service_id, jsonb_array_elements_text(artist_uris) AS artist_uri FROM tracks "
-                      f"UNION SELECT sources.service_id, jsonb_array_elements_text(albums.artist_uris) AS artist_uri FROM albums "
-                      f"JOIN sources ON albums.source_id = sources.source_id "
-                      f"EXCEPT SELECT service_id, artist_uri FROM artists WHERE artist_name IS NOT NULL "
-                      ),
-              },
-             {'name': 'update_soundtracks',
-              'sql': (f"SELECT tracks.service_id, tracks.track_uri FROM tracks "
-                      f"JOIN sources USING (service_id) "
-                      f"JOIN albums ON sources.source_id = albums.source_id AND albums.track_uris ? tracks.track_uri "
-                      f"JOIN album_categories ON albums.source_id = album_categories.source_id "
-                      f"AND albums.album_uri = album_categories.album_uri "
-                      f"LEFT JOIN barcodes USING (upc) "
-                      f"WHERE album_categories.category = 'soundtrack' AND instrumentalness IS NULL "
-                      ),
-              },
-             {'name': 'update_barcodes',
-              'sql': (f"WITH regex_soundtrack AS (SELECT '%(' || string_agg(phrase, '|') || ')%' "
-                      f"AS soundtrack_words FROM keywords WHERE keyword = 'soundtrack'), "
-               
-                      f"upcs AS (SELECT albums.upc FROM albums, regex_soundtrack "
-                      f"WHERE albums.album_type not in ('single', 'ep', 'playlist') AND albums.upc IS NOT NULL "
-                      f"AND lower(albums.album_name) NOT SIMILAR TO soundtrack_words "
-                      f"EXCEPT SELECT upc FROM barcodes UNION SELECT upc FROM barcodes WHERE release_type IS NULL) "
-               
-                      f"SELECT upcs.upc, artists.artist_name, albums.album_name, albums.release_date FROM upcs "
-                      f"JOIN albums USING (upc) JOIN sources USING (source_id) "
-                      f"LEFT JOIN true_album_artists USING (source_id, album_uri) "
-                      f"JOIN artists ON sources.service_id = artists.service_id "
-                      f"AND COALESCE(true_album_artists.artist_uri, albums.artist_uris ->> 0) = artists.artist_uri "
+             {'name': 'album_stars',
+              'sql': (f"WITH critics_stars_expanded AS "
+                      f"(SELECT album_name, jsonb_array_elements_text(artist_names) AS artist_name, "
+                      f"stars FROM critic_stars) "
+                      
+                      f"SELECT source_id, album_uri, MIN(stars) AS stars FROM albums "
+                      f"JOIN album_artists USING (source_id, album_uri) "
+                      f"JOIN critics_stars_expanded ON critics_stars_expanded.album_name = albums.album_name "
+                      f"AND LOWER(album_artists.artist_names) ILIKE '%' || artist_name || '%' "
+                      f"GROUP BY source_id, album_uri "
+                      f";"
                       ),
               },
             ]
+    
+    updates = [{'name': 'update_tracks',
+                'sql': (f"SELECT sources.service_id, jsonb_array_elements_text(albums.track_uris) AS track_uri FROM albums "
+                        f"JOIN sources USING (source_id) "
+                        f"EXCEPT SELECT service_id, track_uri FROM tracks WHERE "
+                        f"(track_name IS NOT NULL AND explicit IS NOT NULL) "
+                        ),
+                },
+               {'name': 'update_recordings',
+                'sql': (f"SELECT tracks.isrc FROM albums JOIN sources ON albums.source_id = sources.source_id "
+                        f"JOIN tracks ON sources.service_id = tracks.service_id AND albums.track_uris ? tracks.track_uri "
+                        f"LEFT JOIN barcodes USING (upc) "
+                        f"WHERE albums.album_type = 'compilation' OR barcodes.release_type = 'compilation' "
+                        f"EXCEPT SELECT isrc FROM recordings "# WHERE iswc IS NOT NULL "
+                        ),
+                },
+               {'name': 'update_works',
+                'sql': (f"SELECT iswc FROM recordings WHERE iswc IS NOT NULL "
+                        f"EXCEPT SELECT iswc FROM works "#"WHERE release_year IS NOT NULL "
+                        ),
+                },
+               {'name': 'update_artists',
+                'sql': (f"SELECT service_id, jsonb_array_elements_text(artist_uris) AS artist_uri FROM tracks "
+                        f"UNION SELECT sources.service_id, jsonb_array_elements_text(albums.artist_uris) AS artist_uri FROM albums "
+                        f"JOIN sources ON albums.source_id = sources.source_id "
+                        f"EXCEPT SELECT service_id, artist_uri FROM artists WHERE artist_name IS NOT NULL "
+                        ),
+                },
+               {'name': 'update_soundtracks',
+                'sql': (f"SELECT tracks.service_id, tracks.track_uri FROM tracks "
+                        f"JOIN sources USING (service_id) "
+                        f"JOIN albums ON sources.source_id = albums.source_id AND albums.track_uris ? tracks.track_uri "
+                        f"JOIN album_categories ON albums.source_id = album_categories.source_id "
+                        f"AND albums.album_uri = album_categories.album_uri "
+                        f"LEFT JOIN barcodes USING (upc) "
+                        f"WHERE album_categories.category = 'soundtrack' AND instrumentalness IS NULL "
+                        ),
+                },
+               {'name': 'update_barcodes',
+                'sql': (f"WITH regex_soundtrack AS (SELECT '%(' || string_agg(phrase, '|') || ')%' "
+                        f"AS soundtrack_words FROM keywords WHERE keyword = 'soundtrack'), "
+               
+                        f"upcs AS (SELECT albums.upc FROM albums, regex_soundtrack "
+                        f"WHERE albums.album_type not in ('single', 'ep', 'playlist') AND albums.upc IS NOT NULL "
+                        f"AND lower(albums.album_name) NOT SIMILAR TO soundtrack_words "
+                        f"EXCEPT SELECT upc FROM barcodes UNION SELECT upc FROM barcodes WHERE release_type IS NULL) "
+               
+                        f"SELECT upcs.upc, artists.artist_name, albums.album_name, albums.release_date FROM upcs "
+                        f"JOIN albums USING (upc) JOIN sources USING (source_id) "
+                        f"LEFT JOIN true_album_artists USING (source_id, album_uri) "
+                        f"JOIN artists ON sources.service_id = artists.service_id "
+                        f"AND COALESCE(true_album_artists.artist_uri, albums.artist_uris ->> 0) = artists.artist_uri "
+                        ),
+                },
+              ]
 
     materialized = [{'name': 'user_albums',
                      'sql': (f"SELECT first_name || ' ' || last_name AS user_name, "
                              f"artist_names, album_name, category, "
                              f"release_date, COALESCE(release_decades, jsonb_build_array(FLOOR(EXTRACT(YEAR FROM release_date) / 10) * 10)) AS release_decades, "
-                             f"ranking, rating, peak_position, "
+                             f"ranking, rating, peak_position, stars, "
                              f"track_list, COALESCE(play_duration, album_duration) AS play_duration, COALESCE(explicit, FALSE) AS explicit, "
                              f"service_name, source_name, "
                              f"user_id, service_id, source_id, album_uri "
@@ -368,13 +419,8 @@ class SQLer:
                              f"LEFT JOIN release_battles USING (user_id, source_id, album_uri) "
                              f"LEFT JOIN track_lists USING (source_id, album_uri) LEFT JOIN explicit_albums USING (source_id, album_uri) "
                              f"LEFT JOIN compilations USING (source_id, album_uri) "
-                             f"LEFT JOIN billboard ON "
-                             f"(CASE WHEN album_artists.artist_names ~* '\s+(and|&|/)\s+' THEN regexp_replace(regexp_replace(lower(album_artists.artist_names), "
-                             f"'\s+&\s+|\s+and\s+|\s+/\s+', '; ', 'g'), ',\s*', '; ', 'g') "
-                             f"ELSE album_artists.artist_names END, regexp_replace(lower(albums.album_name), '\s+/\s+', '/', 'g')) "
-                             f"= (CASE WHEN billboard.credit_names ~* '\s+(and|&|/)\s+' THEN regexp_replace(regexp_replace(lower(billboard.credit_names), "
-                             f"'\s+&\s+|\s+and\s+|\s+/\s+', '; ', 'g'), ',\s*', '; ', 'g') "
-                             f"ELSE billboard.credit_names END, regexp_replace(lower(billboard.album_title), '\s+/\s+', '/', 'g')) "
+                             f"LEFT JOIN chart_peaks USING (source_id, album_uri) "
+                             f"LEFT JOIN album_stars USING (source_id, album_uri) "
                              ),
                      },
                     ] 
@@ -424,7 +470,7 @@ class SQLer:
     ''' view setup '''                    
     def create_views():
         sqls = []
-        for view in SQLer.views:
+        for view in SQLer.views + SQLer.updates:
             sql = f'CREATE OR REPLACE VIEW {view["name"]} AS {view["sql"]};'
             sqls.append(sql)
         return sqls

@@ -207,8 +207,8 @@ class Neon:
         self.update_service_table(albums_df, 'barcodes', columns, ['upc'])
 
     def update_billboard(self, peaks_df, start_date, end_date):
-        columns = ['credit_names', 'album_name', 'peak_position']
-        self.update_service_table(peaks_df, 'billboard', columns, ['credit_names', 'album_name'])
+        columns = ['credit_names', 'album_title', 'peak_position']
+        self.update_service_table(peaks_df, 'billboard', columns, ['credit_names', 'album_title'])
         self.update_data_updates('billboard', start_date, end_date)
 
     def update_critics(self, lists_df):
@@ -418,7 +418,8 @@ class Neon:
 
     ''' get data for push '''
     def get_user_albums(self, user_id, min_ranking=None, min_rating=None, categories=None,
-                        min_duration=None, max_duration=None, explicit=None, release_year=None, release_decade=None):
+                        min_duration=None, max_duration=None, explicit=None, release_year=None, release_decade=None,
+                        min_chart_peak=None, min_stars=None):
         wheres = []
         if min_ranking:
             wheres.append(f'ranking <= {min_ranking}')
@@ -440,14 +441,16 @@ class Neon:
             wheres.append(f"COALESCE(release_decades, jsonb_build_array(FLOOR(EXTRACT(YEAR FROM release_date) / 10) * 10)) ? '{release_decade}'")
         if explicit is not None:
             wheres.append(f'COALESCE(explicit, FALSE) = {explicit}')
+        if min_chart_peak:
+            wheres.append(f'peak_position <= {min_chart_peak}')
+        if min_stars:
+            wheres.append(f'stars >= {min_stars}')
             
         sql = f'SELECT * FROM user_albums WHERE user_id = {user_id}{" AND ".join(wheres)}'
         albums_df = self.read_sql(sql)
         return albums_df
     
-    def get_random_album(self, user_id, min_ranking=None, min_rating=None, categories=None,
-                        min_duration=None, max_duration=None, explicit=None, release_year=None, release_decade=None):
-        albums_df = self.get_user_albums(user_id, min_ranking, min_rating, categories,
-                                         min_duration, max_duration, explicit, release_year, release_decade)
+    def get_random_album(self, user_id, **kwargs):
+        albums_df = self.get_user_albums(user_id, **kwargs)
         album_s = albums_df.sample(1).squeeze()
         return album_s
