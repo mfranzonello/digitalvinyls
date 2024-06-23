@@ -8,6 +8,8 @@ SPOTIFY_TOKENS_FOLDER = f'{SPOTIFY_AUTHS_FOLDER}/tokens'
 SONOS_AUTHS_FOLDER = 'auths/sonos'
 SONOS_TOKENS_FOLDER = f'{SONOS_AUTHS_FOLDER}/tokens'
 STRUCTURE_FOLDER = 'jsons'
+CSVS_FOLDER = 'csvs'
+CRITICS_FOLDER = f'{CSVS_FOLDER}/critics'
 
 def read_json(filepath, filename):
     with open(dirname(dirname(realpath(__file__))) + '/' + filepath + '/' + filename + '.json') as f:

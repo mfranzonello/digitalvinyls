@@ -8,6 +8,8 @@ from urllib import parse
 import itertools
 import statistics
 from collections import Counter
+import os
+from glob import glob
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -15,7 +17,7 @@ import six
 from spotipy import Spotify, SpotifyClientCredentials
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import MemoryCacheHandler
-from pandas import DataFrame
+from pandas import DataFrame, read_csv, concat
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
@@ -25,8 +27,8 @@ from billboard import ChartData
 from common.calling import Caller, Printer
 from common.words import Texter
 from common.secret import get_secret, get_token, save_token
-from common.locations import SPOTIFY_AUTH_URL #, SPOTIFY_REDIRECT_URI
-from common.structure import SPOTIFY_TOKENS_FOLDER, SPOTIFY_AUTHS_FOLDER, SPOTIFY_REDIRECT_URI, get_scope
+from common.locations import SPOTIFY_AUTH_URL, MUSICBRAINZ_URL #, SPOTIFY_REDIRECT_URI
+from common.structure import SPOTIFY_TOKENS_FOLDER, SPOTIFY_AUTHS_FOLDER, SPOTIFY_REDIRECT_URI, CRITICS_FOLDER, get_scope
 from library.wordbank import RemoveWords
 
 class DSP:
@@ -547,7 +549,7 @@ class Sounder(DSP, Service):
 class MusicBrainer(Service, Texter):
     name = 'MusicBrainz'
     
-    url = 'https://musicbrainz.org/ws/2' ## should pull from locations.py
+    url = MUSICBRAINZ_URL
     data = {'fmt': 'json'}
     api_rate_limit = 1 # calls per second
 
@@ -782,15 +784,20 @@ class BBer(Service):
                                                                         
         chart_data = []
         total_weeks = len(date_range)
-        for c, chart_date in enumerate(date_range):
-            self.show_progress(c, total_weeks, message=f'Billboard 200 for {chart_date}')
-            chart = ChartData('billboard-200', date=chart_date)
-            self.sleep()
-            for i in range(200):
-                chart_data.append([chart.date, chart[i].peakPos, chart[i].artist, self.strip_title(chart[i].title)])
-        self.show_progress(total_weeks, total_weeks)
+        if total_weeks:
+            print('getting billboard chart data')
+            for c, chart_date in enumerate(date_range):
+                self.show_progress(c, total_weeks, message=f'Billboard 200 for {chart_date}')
+                chart = ChartData('billboard-200', date=chart_date)
+                self.sleep()
+                for i in range(200):
+                    chart_data.append([chart.date, chart[i].peakPos, chart[i].artist, self.strip_title(chart[i].title)])
+            self.show_progress(total_weeks, total_weeks)
                 
-        charts_df = DataFrame(chart_data, columns=['week', 'peak_position', 'credit_names', 'album_title'])
+            charts_df = DataFrame(chart_data, columns=['week', 'peak_position', 'credit_names', 'album_title'])
+        else:
+            charts_df = DataFrame()
+            
         return charts_df
     
     def get_peak_positions(self, charts_df):
@@ -806,3 +813,55 @@ class BBer(Service):
             if title.lower()[-len(add):] == add:
                 title = title[:-len(' ' + add)]
         return title
+
+
+class Critic(Service):
+    name = 'Best Albums Rankings'
+
+    folder = CRITICS_FOLDER
+    extension = 'csv'
+    
+    def __init__(self):
+        super().__init__()
+        
+    def get_critic_files(self, excludes=DataFrame()):
+        existing = excludes.apply(lambda x: self.make_file_name(x['critic_name'], x['list_year']),
+                                  axis=1).values if not excludes.empty else []
+        critic_files = [critic_name_year for f in glob(os.path.join(self.folder, f'*.{self.extension}')) \
+                        if (critic_name_year:=os.path.splitext(os.path.basename(f))[0]) not in existing]
+        return critic_files
+
+    def get_critic_lists(self, excludes=None):
+        critic_files = self.get_critic_files(excludes)
+             
+        if len(critic_files):
+            print('getting critics picks')
+            critic_lists = []
+            total_files = len(critic_files)
+            for i, critic_file in enumerate(critic_files):
+                critic_name, list_year = self.get_name_and_year(critic_file)
+                self.show_progress(i, total_files, message=f'{critic_name} {list_year}')
+                critic_lists.append(self.get_critic_list(critic_file))
+            self.show_progress(total_files, total_files)
+            lists_df = concat(critic_lists)
+        else:
+            lists_df = DataFrame()
+            
+        return lists_df
+    
+    def get_critic_list(self, file_name):
+        file_path = f'{self.folder}/{file_name}.{self.extension}'
+        critic_name, list_year = self.get_name_and_year(file_name)
+        critic_list = read_csv(file_path)
+        critic_list.loc[:, 'artist_names'] = critic_list['artist_names'].apply(lambda x: x.split('; '))
+        critic_list.loc[:, ['critic_name', 'list_year']] = [critic_name, list_year]
+        return critic_list
+    
+    def get_name_and_year(self, file_name):
+        critic_name = file_name[:-5].replace('_', ' ').title()
+        list_year = int(file_name[-4:])
+        return critic_name, list_year
+    
+    def make_file_name(self, critic_name, list_year):
+        file_name = critic_name.lower().replace(' ', '_') + f'_{list_year}'
+        return file_name

@@ -74,7 +74,7 @@ class Neon:
             value = "'" + value.strftime('%Y-%m-%d') + "'::date"
             
         elif isinstance(value, (list, dict)):
-            value = "'" + json.dumps(self.jsonify(value)) + "'::jsonb"
+            value = "'" + json.dumps(self.jsonify(value)).replace("'", "''") + "'::jsonb"
             
         elif (value is None) or isna(value):
             value = 'NULL'
@@ -210,6 +210,10 @@ class Neon:
         columns = ['credit_names', 'album_name', 'peak_position']
         self.update_service_table(peaks_df, 'billboard', columns, ['credit_names', 'album_name'])
         self.update_data_updates('billboard', start_date, end_date)
+
+    def update_critics(self, lists_df):
+        columns = ['critic_name', 'list_year', 'list_position', 'album_name', 'artist_names']
+        self.update_service_table(lists_df, 'critics', columns, ['critic_name', 'list_year', 'list_position'])
 
     def update_user(self, user):
         columns = ['user_id', 'first_name', 'last_name', 'service_user_ids', 'image_src']
@@ -393,6 +397,11 @@ class Neon:
     def get_billboard_to_update(self):
         start_date, end_date = self.get_data_updates('billboard')
         return start_date, end_date
+    
+    def get_critics_to_update(self):
+        sql = (f"SELECT DISTINCT critic_name, list_year FROM critics;")
+        excludes = self.read_sql(sql)
+        return excludes
 
     def get_user_ids(self):
         sql = (f'SELECT user_id FROM users;')

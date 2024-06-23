@@ -129,12 +129,12 @@ class SQLer:
               {'name': 'critics',
                'columns': [['critic_name', 'varchar'],
                            ['list_year', 'integer'],
-                           ['list_type', 'varchar'], #all_time, annual
-                           ['position', 'int'],
-                           ['artist_name', 'varchar'],
+                           ##['list_type', 'varchar'], #all_time, annual
+                           ['list_position', 'int'],
                            ['album_name', 'varchar'],
+                           ['artist_names', 'jsonb'],
                            ],
-               'pk': ['critic_name', 'list_year', 'position'],            
+               'pk': ['critic_name', 'list_year', 'list_position'],            
                },
               {'name': '_data_updates',
                'columns': [['table_name', 'varchar'],

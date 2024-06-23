@@ -1,7 +1,7 @@
 ''' Fill out library '''
 
 from setup import set_up_database
-from music.dsp import Spotter, Sounder, MusicBrainer, BBer
+from music.dsp import Spotter, Sounder, MusicBrainer, BBer, Critic
         
 def update_tracks(neon, DSPs):
     for S in DSPs:
@@ -66,13 +66,6 @@ def update_barcodes(neon):
         neon.update_barcodes(albums_df)    
         service.disconnect()
 
-def update_charts(neon):
-    service = BBer()
-    start_date, end_date = neon.get_billboard_to_update()
-    charts_df = service.get_billboard_albums(start_date=start_date, end_date=end_date)
-    peaks_df, start_date, end_date = service.get_peak_positions(charts_df)
-    neon.update_billboard(peaks_df, start_date, end_date)
-
 if __name__ == '__main__':
     neon = set_up_database()
     
@@ -84,9 +77,7 @@ if __name__ == '__main__':
     update_recordings(neon)
     update_works(neon)
     update_barcodes(neon)
-    
-    update_charts(neon)
-    
+
     neon.refresh_views()
 
     quit()
