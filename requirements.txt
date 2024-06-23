@@ -2,3 +2,9 @@ pandas==2.1.4
 billboard.py==7.0.1
 psycopg2==2.9.9
 SQLAlchemy==2.0.30
+numpy=1.26.2
+requests==2.32.3
+stopipy=2.23.0
+selenium=4.18.1
+six==1.16.0
+soco==0.30.4

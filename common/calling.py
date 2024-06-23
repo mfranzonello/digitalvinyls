@@ -1,8 +1,9 @@
 ''' Calling APIs, receiving JSONs and updating JSONs '''
 
-import requests
 from datetime import datetime, timedelta
 import time
+
+import requests
 
 from common.words import Colors
 
