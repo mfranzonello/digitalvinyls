@@ -1,3 +1,4 @@
-pandas
-sqlalchemy
-psycopg2
+pandas==2.1.4
+billboard==7.0.1
+psycopg2==2.9.9
+SQLAlchemy==2.0.30

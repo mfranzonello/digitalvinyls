@@ -16,13 +16,17 @@ def update_critics(neon):
     lists_df = service.get_critic_lists(excludes)
     if not lists_df.empty:
         neon.update_critics(lists_df)
+        
+def main(critics=True, charts=True):
+    if any([critics, charts]):
+        neon = set_up_database()
+    
+        if critics:
+            update_critics(neon)
+        if charts:
+            update_charts(neon)
+    
+        neon.refresh_views()
 
 if __name__ == '__main__':
-    neon = set_up_database()
-    
-    update_critics(neon)    
-    update_charts(neon)
-    
-    neon.refresh_views()
-
-    quit()
+    main()
