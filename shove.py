@@ -65,8 +65,8 @@ def update_barcodes(neon):
         albums_df = service.get_barcodes_data(albums_df)
         neon.update_barcodes(albums_df)    
         service.disconnect()
-
-if __name__ == '__main__':
+        
+def main():
     neon = set_up_database()
     
     DSPs = [Spotter, Sounder]
@@ -80,4 +80,5 @@ if __name__ == '__main__':
 
     neon.refresh_views()
 
-    quit()
+if __name__ == '__main__':
+    main()    
