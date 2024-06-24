@@ -1,4 +1,4 @@
-''' Listeners '''
+''' Music fans '''
 
 from pandas import isna
 
@@ -26,11 +26,34 @@ class User:
     def add_picture(self, image_src):
         self.image_src = image_src
         
-class Ranker(Texter):
+
+class Picker:
     def __init__(self):
-        super().__init__()
+        self.users = []
+
+    def add_users(self, users):
+        self.users.extend(users)
+
+    def select_user(self, message=''):
+        user_print = '\n'.join(f'[{i+1}] - {user.first_name} {user.last_name}' for i, user in enumerate(self.users))
+        user_range = [str(i+1) for i in range(len(self.users))] # need to limit to 9 at a time
+        print(f'Whose music do you want to {message}?')
+        print(user_print)
+            
+        key, _ = Stroker.get_keystroke(allowed_keys=user_range, quit_key='Q')
+            
+        user = self.users[user_range.index(key)]
+            
+        return user
+        
+
+class Ranker(Texter, Picker):
+    def __init__(self):
+        Texter.__init__(self)
+        Picker.__init__(self)
     
-    def play(self, neon, user):
+    def play(self, neon):
+        user = self.select_user(message='rank and rate')
         user_name = f'{user.first_name} {user.last_name}'
         user_id = user.user_id
         
@@ -55,6 +78,7 @@ class Ranker(Texter):
                 self.get_summary(neon, user_id)
 
         # make sure to update results in the materialized views
+        print('refreshing materialized view')
         neon.refresh_views()
         print(f'See you later, {user_name}!')
        

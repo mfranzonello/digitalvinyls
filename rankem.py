@@ -1,19 +1,17 @@
 ''' Rank and rate albums '''
 
-from setup import set_up_database
-from music.listeners import Ranker, User
+from setup import set_up_database, set_up_users
+from music.listeners import Ranker
 
-def rank_music(neon, user_id):
+def rank_music(neon):
+    users = set_up_users(neon)
     ranker = Ranker()
-    ranker.play(neon, user_id)
+    ranker.add_users(users)
+    ranker.play(neon)
 
-user_id = 1
+def main():
+    neon = set_up_database()
+    rank_music(neon)
 
 if __name__ == '__main__':
-    neon = set_up_database()
-    user_s = neon.get_user(user_id)
-    user = User(user_id, user_s['first_name'], user_s['last_name'])
-    
-    rank_music(neon, user)
-
-    quit()
+    main()

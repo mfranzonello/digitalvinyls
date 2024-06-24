@@ -1,4 +1,4 @@
-''' Database functionality '''
+''' Database tables and views '''
 
 class SQLer:
     tables = [{'name': 'services',
@@ -358,10 +358,10 @@ class SQLer:
                         ),
                 },
                {'name': 'update_recordings',
-                'sql': (f"SELECT tracks.isrc FROM albums JOIN sources ON albums.source_id = sources.source_id "
+                'sql': (f"SELECT isrc FROM albums JOIN sources USING (source_id) "
                         f"JOIN tracks ON sources.service_id = tracks.service_id AND albums.track_uris ? tracks.track_uri "
                         f"LEFT JOIN barcodes USING (upc) "
-                        f"WHERE albums.album_type = 'compilation' OR barcodes.release_type = 'compilation' "
+                        f"WHERE album_type = 'compilation' OR release_type = 'compilation' "
                         f"EXCEPT SELECT isrc FROM recordings "# WHERE iswc IS NOT NULL "
                         ),
                 },
@@ -372,13 +372,13 @@ class SQLer:
                 },
                {'name': 'update_artists',
                 'sql': (f"SELECT service_id, jsonb_array_elements_text(artist_uris) AS artist_uri FROM tracks "
-                        f"UNION SELECT sources.service_id, jsonb_array_elements_text(albums.artist_uris) AS artist_uri FROM albums "
-                        f"JOIN sources ON albums.source_id = sources.source_id "
+                        f"UNION SELECT service_id, jsonb_array_elements_text(artist_uris) AS artist_uri FROM albums "
+                        f"JOIN sources USING (source_id) "
                         f"EXCEPT SELECT service_id, artist_uri FROM artists WHERE artist_name IS NOT NULL "
                         ),
                 },
                {'name': 'update_soundtracks',
-                'sql': (f"SELECT tracks.service_id, tracks.track_uri FROM tracks "
+                'sql': (f"SELECT service_id, track_uri FROM tracks "
                         f"JOIN sources USING (service_id) "
                         f"JOIN albums ON sources.source_id = albums.source_id AND albums.track_uris ? tracks.track_uri "
                         f"JOIN album_categories ON albums.source_id = album_categories.source_id "
@@ -498,7 +498,6 @@ class SQLer:
         return sqls
                
     def summarize_views():
-        update_views = [view['name'] for view in SQLer.views if 'update_' in view['name']]
-        unions = ' UNION '.join(f"SELECT '{uv}' AS update_name, count(*) AS remaining_rows FROM {uv} " for uv in update_views) 
+        unions = ' UNION '.join(f"SELECT '{uv['name']}' AS update_name, count(*) AS remaining_rows FROM {uv['name']} " for uv in SQLer.updates) 
         sql = f'CREATE OR REPLACE VIEW {SQLer.summary["name"]} AS {unions};'
         return [sql]

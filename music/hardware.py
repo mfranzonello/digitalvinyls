@@ -11,13 +11,14 @@ from soco.music_services import MusicService
 
 from common.calling import Caller
 from common.structure import SONOS_TOKENS_FOLDER, SONOS_REDIRECT_URI
-from common.locations import SONOS_HOST, SONOS_PORT
+from common.locations import SONOS_LOGIN_URL, SONOS_CONTROL_URL #, SONOS_HOST, SONOS_PORT
 from common.secret import get_secret, get_token, save_token
 from common.entry import Stroker
+from music.liseners import Picker
 
 class Sonoser(Caller):
-    login_url = 'https://api.sonos.com/login/v3'
-    control_url = 'https://api.ws.sonos.com/control/api/v1'
+    login_url = SONOS_LOGIN_URL
+    control_url = SONOS_CONTROL_URL
     def __init__(self):
         super().__init__()
         self.access_token = None
@@ -211,29 +212,15 @@ class Sonoser(Caller):
         
         device.play_from_queue(0)
 
-class Turntable:
+class Turntable(Picker):
     def __init__(self):
+        super().__init__()
         self.users = []
         self.record_stack = []
         self.needle = -1
-
-    def add_users(self, users):
-        self.users.extend(users)
         
-    def select_user(self):
-        user_print = '\n'.join(f'[{i+1}] - {user.first_name} {user.last_name}' for i, user in enumerate(self.users))
-        user_range = [str(i+1) for i in range(len(self.users))] # need to limit to 9 at a time
-        print('Whose music do you want to listen to?')
-        print(user_print)
-            
-        key, _ = Stroker.get_keystroke(allowed_keys=user_range, quit_key='Q')
-            
-        user = self.users[user_range.index(key)]
-            
-        return user
-
     def play_music(self, neon, sonoser):
-        user = self.select_user()   
+        user = self.select_user(message='listen to')   
 
         user_name = user.first_name + ' ' + user.last_name
         user_id = user.user_id

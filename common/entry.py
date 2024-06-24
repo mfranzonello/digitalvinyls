@@ -1,3 +1,5 @@
+''' CLI in lieu of webpage '''
+
 import keyboard
 import pygetwindow
 

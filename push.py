@@ -1,6 +1,6 @@
 ''' Play music '''
 
-from setup import set_up_database, set_up_user
+from setup import set_up_database, set_up_users
 from music.hardware import Sonoser, Turntable
 
 def set_up_speakers():
@@ -17,7 +17,7 @@ def set_up_speakers():
     return sonoser
 
 def play_albums(neon, sonoser):
-    users = [set_up_user(neon, user_id) for user_id in neon.get_user_ids()]
+    users = set_up_users(neon)
     turntable = Turntable()
     turntable.add_users(users)
     turntable.play_music(neon, sonoser)

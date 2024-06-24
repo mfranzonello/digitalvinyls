@@ -17,6 +17,10 @@ def get_secret(name):
 
 def set_secret(name, value):
     set_key(find_dotenv(), name, value, 'never')
+  
+
+
+
 
 def list_secrets():
     return dotenv_values(find_dotenv())

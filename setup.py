@@ -24,8 +24,12 @@ def set_up_user(neon, user_id):
     user.add_services(user_s['service_user_ids'])
     return user
 
-if __name__ == '__main__':
-    # make sure all tables and views are set up
+def set_up_users(neon):
+    users = [set_up_user(neon, user_id) for user_id in neon.get_user_ids()]
+    return users
+
+def main():
     set_up_database(drop_tables=False, create_tables=True, drop_views=True, create_views=True, materialize=True)
-    
-    quit()
+
+if __name__ == '__main__':
+    main()

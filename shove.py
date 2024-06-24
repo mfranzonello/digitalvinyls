@@ -1,7 +1,7 @@
 ''' Fill out library '''
 
 from setup import set_up_database
-from music.dsp import Spotter, Sounder, MusicBrainer, BBer, Critic
+from music.dsp import Spotter, Sounder, MusicBrainer
         
 def update_tracks(neon, DSPs):
     for S in DSPs:

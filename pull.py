@@ -3,7 +3,6 @@
 from setup import set_up_database, set_up_user
 from music.dsp import Spotter, Sounder
 
-
 def update_albums(neon, DSPs, user):
     for S in DSPs:
         service = S()
@@ -34,13 +33,14 @@ def update_pulls(neon, albums_df, artists_df, ownerships_df, service_id, source_
     if ownerships_df is not None:
         neon.update_ownerships(ownerships_df, source_id, user.user_id)
 
-if __name__ == '__main__':
+def main():
     DSPs = [Spotter, Sounder]
     neon = set_up_database()
     user_ids = neon.get_user_ids()
     
     for user_id in user_ids:
         user = set_up_user(neon, user_id)
-        update_albums(neon, DSPs, user)
-          
-    quit()
+        update_albums(neon, DSPs, user)    
+
+if __name__ == '__main__':
+    main()

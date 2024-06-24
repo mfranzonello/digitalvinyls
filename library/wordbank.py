@@ -1,3 +1,5 @@
+''' Special words '''
+
 class RemoveWords:
     albums = [{'position': 'start',
                'words': ['Remastered', 'Spotify Exclusive', '.*Anniversary Edition', 'Special.*Edition']},

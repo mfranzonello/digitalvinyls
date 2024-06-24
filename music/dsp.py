@@ -1,4 +1,4 @@
-''' Streaming music sources and libaries '''
+''' Streaming music sources and libraries '''
 
 from math import ceil
 from datetime import datetime, timedelta
@@ -40,6 +40,7 @@ class DSP:
     
     def get_playlists(self, **kwargs):
         return None, None, None
+
 
 class Service(Printer, Caller):
     name = None
@@ -161,7 +162,7 @@ class Spotter(DSP, Service):
         self.show_progress(offset, total)
         while total is None or offset < total:
             results = self.sp.current_user_saved_albums(limit=50, offset=offset)
-            self.sleep(1/self.api_rate_limit)
+            self.sleep()
             info__1 = {}
             info__2 = {}
             info__3 = {}
@@ -236,15 +237,18 @@ class Spotter(DSP, Service):
             self.show_progress(offset, total)
             
         if len(possible_lists):
-            albums_df, artists_df, ownerships_df = self.get_playlist_info(self, possible_lists, various_artist_uri)
+            albums_df, artists_df, ownerships_df = self.get_playlist_info(possible_lists, various_artist_uri)
                 
         return albums_df, artists_df, ownerships_df
     
     def get_playlist_info(self, possible_lists, various_artist_uri):
+        print('analyzing playlists')
         info_1 = {}
         info_2 = {}
         info_3 = {}
-        for p_list, count in possible_lists:
+        total_lists = len(possible_lists)
+        for p, (p_list, count) in enumerate(possible_lists):
+            self.show_progress(p, total_lists)
             info__1 = {}
             info__2 = {}
             info__3 = {}
@@ -265,7 +269,8 @@ class Spotter(DSP, Service):
                 self.sleep()
             
                 total = results['total']
-                all_items.extend(results['items'])
+                items = results['items']
+                all_items.extend(items)
 
                 offset += len(items)
                             
@@ -273,18 +278,20 @@ class Spotter(DSP, Service):
                 # this is not an acceptible configuration
                 index_splits = None
                 
-            elif count == 'multiple':
-                # this is multiple albums on one playlist
-                album_uris = [t['track']['album']['id'] for t in all_items]
-                index_splits = self.split_by_uri(album_uris)
-                    
             else:
-                # this is one playlist
-                index_splits = (0, len(album_uris))
+                album_uris = [t['track']['album']['id'] for t in all_items]
+                    
+                match count:
+                    case 'multiple':
+                        # this is multiple albums on one playlist
+                        index_splits = self.split_by_uri(album_uris)
+                    
+                    case 'single':
+                        # this is one playlist
+                        index_splits = [(0, len(album_uris))]
                 
-            if index_splits:
-                for i, split in enumerate(index_splits):
-                    items = all_items[split[0]:split[1]]
+                for i, (start, end) in enumerate(index_splits):
+                    items = all_items[start:end]
                     
                     match count:
                         case 'multiple':
@@ -338,7 +345,8 @@ class Spotter(DSP, Service):
                     for i_0, i__0 in zip([info_1, info_2, info_3], [info__1, info__2, info__3]):
                         for key in i__0.keys():
                             i_0[key] = i_0.get(key, []) + i__0[key]
-                                                                        
+        
+        self.show_progress(total_lists, total_lists)
         albums_df = DataFrame(info_1)
         artists_df = DataFrame(info_2).drop_duplicates()
         ownerships_df = DataFrame(info_3)
