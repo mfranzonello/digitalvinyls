@@ -30,6 +30,8 @@ SPOTIFY_REDIRECT_URI = structures['SONOS_REDIRECT_URI']
 NEON_DB_NAME = structures['NEON_DB_NAME']
 NEON_USERNAME = structures['NEON_USERNAME']
 NEON_HOST = structures['NEON_HOST']
+SONOS_HOST = structures['SONOS_HOST']
+SONOS_PORT = structures['SONOS_PORT']
 
 def get_scope(folder):
     scope = read_json(folder, 'scopes')

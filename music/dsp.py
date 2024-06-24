@@ -26,7 +26,7 @@ from billboard import ChartData
 from common.calling import Caller, Printer
 from common.words import Texter
 from common.secret import get_secret, get_token, save_token
-from common.locations import SPOTIFY_AUTH_URL, MUSICBRAINZ_URL #, SPOTIFY_REDIRECT_URI
+from common.locations import SPOTIFY_AUTH_URL, MUSICBRAINZ_URL
 from common.structure import SPOTIFY_TOKENS_FOLDER, SPOTIFY_AUTHS_FOLDER, SPOTIFY_REDIRECT_URI, CRITICS_FOLDER, get_scope
 from library.wordbank import RemoveWords
 

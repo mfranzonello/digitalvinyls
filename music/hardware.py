@@ -9,8 +9,8 @@ from soco.discovery import by_name as discover_by_name
 from soco.music_services import MusicService
 
 from common.calling import Caller
-from common.structure import SONOS_TOKENS_FOLDER, SONOS_REDIRECT_URI
-from common.locations import SONOS_LOGIN_URL, SONOS_CONTROL_URL #, SONOS_HOST, SONOS_PORT
+from common.locations import SONOS_LOGIN_URL, SONOS_CONTROL_URL
+from common.structure import SONOS_TOKENS_FOLDER, SONOS_REDIRECT_URI, SONOS_HOST, SONOS_PORT
 from common.secret import get_secret, get_token, save_token
 from common.entry import Stroker
 from music.liseners import Picker
