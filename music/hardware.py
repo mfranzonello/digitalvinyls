@@ -1,4 +1,4 @@
-''' Devices to play music '''
+﻿''' Devices to play music '''
 
 #from base64 import b64encode
 
@@ -17,7 +17,7 @@ from common.entry import Stroker
 
 class Sonoser(Caller):
     login_url = 'https://api.sonos.com/login/v3'
-    control_url = 'https://api.ws.sonos.com/control/api/v1/'
+    control_url = 'https://api.ws.sonos.com/control/api/v1'
     def __init__(self):
         super().__init__()
         self.access_token = None
@@ -105,6 +105,30 @@ class Sonoser(Caller):
             if response.ok:
                 self.controller_id = response.json()['group_id']
                 self.set_controller_name()
+
+    def get_play_status(self):
+        url = f'{self.control_url}/groups/{self.controller_id}/playback'
+        response = requests.get(url, headers=self.get_headers())
+        if response.ok:
+            match response.json()['playbackState']:
+                case 'PLAYBACK_STATE_PLAYING' | 'PLAYBACK_STATE_BUFFERING':
+                    play_status = True
+                case 'PLAYBACK_STATE_IDLE' | 'PLAYBACK_STATE_PAUSED':
+                    play_status = False
+            
+        else:
+            print(response.reason)
+            play_status = None
+            
+        return play_status
+        
+    def change_play_status(self):
+        url = f'{self.control_url}/groups/{self.controller_id}/playback/togglePlayPause'
+        response = requests.post(url, headers=self.get_headers())
+        if not response.ok:
+            print(response.reason)
+        
+        return self.get_play_status()
                 
     def set_controller_name(self):
         coordinator_id = self.groups[self.controller_id]['coordinator_id']
@@ -129,7 +153,7 @@ class Sonoser(Caller):
             
         if list_source:
             list_id = next(key for key, value in source.items() if value == list_name)
-            url = f'{self.control_url}/groups/{self.groups[0]["id"]}/{list_source}'
+            url = f'{self.control_url}/groups/{self.controller_id}/{list_source}'
             data = {f'{list_source[:-1]}Id': list_id,
                     'action': 'REPLACE',
                     'playOnCompletion': True}
@@ -189,24 +213,73 @@ class Sonoser(Caller):
 
 class Turntable:
     def __init__(self):
-        self.previous_album = None
-    
-    def play_music(self, neon, sonoser, user):
+        self.users = []
+        self.record_stack = []
+        self.needle = -1
+
+    def add_users(self, users):
+        self.users.extend(users)
+        
+    def select_user(self):
+        user_print = '\n'.join(f'[{i+1}] - {user.first_name} {user.last_name}' for i, user in enumerate(self.users))
+        user_range = [str(i+1) for i in range(len(self.users))] # need to limit to 9 at a time
+        print('Whose music do you want to listen to?')
+        print(user_print)
+            
+        key, _ = Stroker.get_keystroke(allowed_keys=user_range, quit_key='Q')
+            
+        user = self.users[user_range.index(key)]
+            
+        return user
+
+    def play_music(self, neon, sonoser):
+        user = self.select_user()   
+
         user_name = user.first_name + ' ' + user.last_name
         user_id = user.user_id
         print(f'Welcome {user_name}!')
+        press_right = '[→] to play the next album'
         
         loop = True
         while loop:
-            print(' Press [N] to play a new album or press [Q] to quit.')
-
-            loop = Stroker.get_keystroke(allowed_keys=['N'], quit_key='Q')
-            if loop:
-                self.play_album(neon, sonoser, user_id)
+            if self.needle >= 0:
+                press_left = '[←] to go back to the previous album'
+                press_up = '[↑] to replay this album'
+                press_down = f'[↓] to {"pause" if sonoser.get_play_status() else "continue"} playing'
+                allowed_keys = ['LEFT', 'RIGHT', 'UP', 'DOWN']
+            else:
+                press_left = press_up = press_down = None
+                allowed_keys = ['RIGHT']
                 
-    def play_album(self, neon, sonoser, user_id):
-        album_s = neon.get_random_album(user_id)
+            press_choices = ', '.join(p for p in [press_left, press_up, press_down, press_right] if p)
+            print(f'Press {press_choices} or [Q] to quit.')
+            key, loop = Stroker.get_keystroke(allowed_keys=allowed_keys, quit_key='Q')
+            if loop:
+                match key:
+                    case 'LEFT':
+                        skip = -1
+                    case 'RIGHT':
+                        skip = 1
+                    case 'UP':
+                        skip = 0
+                    
+                if key in ['LEFT', 'RIGHT', 'UP']:
+                    album_s = self.select_album(neon, user_id, skip)
+                    self.play_album(neon, sonoser, user_id, album_s)
 
+                elif key == 'DOWN':
+                    sonoser.change_play_status()
+                
+    def select_album(self, neon, user_id, skip=0):
+        # get the next album to play
+        self.needle += skip
+        if self.needle >= len(self.record_stack):
+            # add new album to the stack
+            self.record_stack.append(neon.get_random_album(user_id))
+        album_s = self.record_stack[self.needle]
+        return album_s
+        
+    def play_album(self, neon, sonoser, user_id, album_s):
         artist_names, album_name = album_s[['artist_names', 'album_name']]
         service_name, source_name, service_id, source_id = album_s[['service_name', 'source_name',
                                                                     'service_id', 'source_id']]

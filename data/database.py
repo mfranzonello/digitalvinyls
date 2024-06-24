@@ -30,13 +30,16 @@ class Neon:
         host = NEON_HOST
         db_name = NEON_DB_NAME
         url = f'postgresql://{username}:{password}.{host}/{db_name}?sslmode=require'
+        
+        print('connecting to database')
         engine = create_engine(url, pool_pre_ping=True,
                                connect_args={'keepalives': 1,
                                              'keepalives_idle': 30,
                                              'keepalives_interval': 10,
                                              'keepalives_count': 5})
         self.connection = engine.connect()
-        
+        print('connected')
+
     def disconnect(self):
         if self.connection:
             self.connection = None
@@ -407,10 +410,11 @@ class Neon:
         sql = (f'SELECT user_id FROM users;')
         user_ids = self.read_sql(sql)['user_id'].to_list()
         return user_ids
-
+    
     def get_user(self, user_id):
         sql = (f'SELECT * FROM users '
-               f'WHERE user_id = {self.dbify(user_id)};'
+               f'WHERE user_id = {self.dbify(user_id)}'
+               f';'
                )
         user_s = self.read_sql(sql).squeeze()
         return user_s

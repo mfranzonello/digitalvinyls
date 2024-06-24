@@ -16,21 +16,20 @@ def set_up_speakers():
     
     return sonoser
 
-def play_album(neon, sonoser, user):
+def play_albums(neon, sonoser):
+    users = [set_up_user(neon, user_id) for user_id in neon.get_user_ids()]
     turntable = Turntable()
-    turntable.play_music(neon, sonoser, user)
+    turntable.add_users(users)
+    turntable.play_music(neon, sonoser)
     
     # # print(sonoser.access_token)
     # # print(sonoser.household_id)
     # # print(sonoser.groups)
 
-user_id = 1
+def main():
+    neon = set_up_database()
+    sonoser = set_up_speakers()
+    play_albums(neon, sonoser)
 
 if __name__ == '__main__':
-    neon = set_up_database()
-    user = set_up_user(neon, user_id)
-    sonoser = set_up_speakers()
-
-    play_album(neon, sonoser, user)
-
-    quit()
+    main()
