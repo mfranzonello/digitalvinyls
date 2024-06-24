@@ -4,8 +4,7 @@ from datetime import datetime
 import json
 import time
 
-from psycopg2 import OperationalError
-from pandas import DataFrame, Series, read_sql, isna
+from pandas import read_sql, isna
 from numpy import integer, floating
 from sqlalchemy import create_engine, text
 

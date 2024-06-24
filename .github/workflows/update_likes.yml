@@ -1,8 +1,8 @@
-name: LIBRARY - Update with additional information from Spotify and MusicBrainz
+name: LIKES - Get albums and playlists from Spotify and other locations
 
 on:
   schedule:
-    - cron: '0 15 * * *'
+    - cron: '0 5 * * *'
     
 jobs:
 
@@ -33,4 +33,4 @@ jobs:
         SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTFY_CLIENT_SECRET }}
         
       run: |
-        python -c 'import shove; shove.main()'
+        python -c 'import pull; pull.main()'

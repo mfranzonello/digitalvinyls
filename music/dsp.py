@@ -4,7 +4,6 @@ from math import ceil
 from datetime import datetime, timedelta
 from base64 import b64encode, urlsafe_b64encode
 from time import sleep
-from urllib import parse
 import itertools
 import statistics
 from collections import Counter

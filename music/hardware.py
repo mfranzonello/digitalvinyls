@@ -4,7 +4,6 @@
 
 import requests
 from requests.auth import HTTPBasicAuth
-import soco
 from soco.data_structures import DidlItem, to_didl_string
 from soco.discovery import by_name as discover_by_name
 from soco.music_services import MusicService
