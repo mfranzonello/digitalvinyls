@@ -1,6 +1,6 @@
 ''' Get data to build library '''
 
-from setup import set_up_database, set_up_user
+from setup import set_up_database, set_up_user, is_updatable
 from music.dsp import Spotter, Sounder
 
 def update_albums(neon, DSPs, user):
@@ -8,6 +8,8 @@ def update_albums(neon, DSPs, user):
         service = S()
         if user.has_service(service.name):
             service.connect(user.get_user_id(service.name))
+            various_artist_uri = neon.get_various_artist_uri(neon.get_service_id(service.name))
+            service.add_various_artist_id(various_artist_uri)
             service_id = neon.get_service_id(service.name)
             sources_df = neon.get_sources(service_id)
             
@@ -16,21 +18,21 @@ def update_albums(neon, DSPs, user):
                     case 'albums':
                         albums_df, artists_df, ownerships_df = service.get_albums()
                     case 'playlists':
-                        various_artist_uri = neon.get_various_artist_uri(service_id)
-                        albums_df, artists_df, ownerships_df = service.get_playlists(various_artist_uri)
+                        albums_df, artists_df, ownerships_df = service.get_playlists()
                     case 'favorites':
                         albums_df, artists_df, ownerships_df = service.get_favorites()
                     case _:
                         albums_df = artists_df = ownerships_df = None
+
                 update_pulls(neon, albums_df, artists_df, ownerships_df, service_id, source_id, user)
             service.disconnect()
         
 def update_pulls(neon, albums_df, artists_df, ownerships_df, service_id, source_id, user):
-    if artists_df is not None:
+    if is_updatable(artists_df):
         neon.update_artists(artists_df, service_id)
-    if albums_df is not None:
+    if is_updatable(albums_df):
         neon.update_albums(albums_df, source_id)
-    if ownerships_df is not None:
+    if is_updatable(ownerships_df):
         neon.update_ownerships(ownerships_df, source_id, user.user_id)
 
 def main():

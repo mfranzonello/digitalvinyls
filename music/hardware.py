@@ -1,5 +1,6 @@
 ﻿''' Devices to play music '''
 
+from datetime import datetime
 #from base64 import b64encode
 
 import requests
@@ -7,13 +8,14 @@ from requests.auth import HTTPBasicAuth
 from soco.data_structures import DidlItem, to_didl_string
 from soco.discovery import by_name as discover_by_name
 from soco.music_services import MusicService
+from pandas import DataFrame
 
 from common.calling import Caller
 from common.locations import SONOS_LOGIN_URL, SONOS_CONTROL_URL
 from common.structure import SONOS_TOKENS_FOLDER, SONOS_REDIRECT_URI, SONOS_HOST, SONOS_PORT
 from common.secret import get_secret, get_token, save_token
 from common.entry import Stroker
-from music.liseners import Picker
+from music.listeners import Picker
 
 class Sonoser(Caller):
     login_url = SONOS_LOGIN_URL
@@ -59,7 +61,7 @@ class Sonoser(Caller):
         response = requests.post(url, data=data, auth=self.get_auth_header())
         if response.ok:
             self.access_token = response.json()['access_token']
-
+            
     def get_households(self):
         url = f'{self.control_url}/households'
         data = {'connectedOnly': True}
@@ -139,8 +141,41 @@ class Sonoser(Caller):
         data = {}
         response = requests.get(url, params=data, headers=self.get_headers())
         if response.ok:
-            self.playlists = {p['id']: p['name'] for p in response.json()['playlists']}
+            print(response.json())
+            
+    def get_favorites(self):
+        url = f'{self.control_url}/households/{self.household_id}/favorites'
+        data = {}
+        response = requests.get(url, params=data, headers=self.get_headers())
+        if response.ok:
+            print(response.json())
+            items = response.json()['items']
+            info_albums = {}
+            info_artists = {}
+            info_ownerships = {}
+            
+            #info_albums['artist_uris'] = [None for item in items]
+            info_albums['album_uri'] = [item['id'] for item in items]
+            info_albums['album_name'] = [item['name'] for item in items]
+            info_albums['image_src'] = [item['images'][0]['url'] for item in items]
+            info_albums['album_type'] = [item['resource']['type'].lower() for item in items]
+            #info_albums['track_uris'] = [None for item in items]
+            #info_albums['album_duration'] = [None for item in items]
+            #info_albums['upc'] = [None for item in items]
+            #info_albums['release_date'] = [None for item in items]
 
+            #info_artists['artist_uri'] = [None for item in items]
+            #info_artists['artist_name'] = [None for item in items]
+
+            info_ownerships['album_uri'] = info_albums['album_uri']
+            info_ownerships['like_date'] = datetime.today().date()
+    
+        albums_df = DataFrame(info_albums)
+        artists_df = DataFrame(info_artists).drop_duplicates()
+        ownerships_df = DataFrame(info_ownerships)
+        
+        return albums_df, artists_df, ownerships_df
+    
     def play_sonos_list(self, list_name):
         list_source = None
         if list_name in self.favorites.values():

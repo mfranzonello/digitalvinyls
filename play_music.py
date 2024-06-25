@@ -25,8 +25,7 @@ def play_albums(neon, sonoser):
     # # print(sonoser.access_token)
     # # print(sonoser.household_id)
     # # print(sonoser.groups)
-
-def main():
+def man():
     neon = set_up_database()
     sonoser = set_up_speakers()
     play_albums(neon, sonoser)

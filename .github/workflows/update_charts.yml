@@ -31,4 +31,4 @@ jobs:
 
         NEON_PASSWORD: ${{ secrets.NEON_PASSWORD }}
       run: |
-        python -c 'import chart; chart.main(critics=False, charts=True)'
+        python -c 'import pull_charts; pull_charts.main(critics=False, charts=True)'

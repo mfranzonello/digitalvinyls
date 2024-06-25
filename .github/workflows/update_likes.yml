@@ -33,4 +33,4 @@ jobs:
         SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTFY_CLIENT_SECRET }}
         
       run: |
-        python -c 'import pull; pull.main()'
+        python pull_likes.py

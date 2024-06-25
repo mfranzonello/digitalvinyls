@@ -1,6 +1,6 @@
 ''' Database functionality '''
 
-from datetime import datetime
+from datetime import datetime, date as dtdate
 import json
 import time
 
@@ -76,7 +76,7 @@ class Neon:
         if isinstance(value, str):
             value = "'" + value.replace("'", "''") + "'"
             
-        elif isinstance(value, datetime):
+        elif isinstance(value, (datetime, dtdate)):
             value = "'" + value.strftime('%Y-%m-%d') + "'::date"
             
         elif isinstance(value, (list, dict)):
@@ -127,7 +127,10 @@ class Neon:
 
         
     ''' update data from pull '''
-    def update_service_table(self, df, table_name, columns, pk_columns, service_id=None, source_id=None, update_only=False, drop=None):
+    def update_service_table(self, df, table_name, columns, pk_columns, service_id=None, source_id=None, update_only=False, drop=None,
+                             least_dates=[], greatest_dates=[]):
+        # filter out columns that aren't in the df
+        columns = [c for c in columns if c in df.columns]
         s_id = ['service_id'] if service_id else ['source_id'] if source_id else []
         s_id_v = f'{self.dbify(service_id)}, ' if service_id else f'{self.dbify(source_id)}, ' if source_id else ''
         values = ', '.join('(' + s_id_v + ', '.join(self.dbify(v) for v in r) + ')' for r in df[columns].values)
@@ -147,7 +150,7 @@ class Neon:
                    )
         else:
             # updating
-            sets = ', '.join(f'{c} = updt.{c}' for c in columns if c not in s_id + pk_columns)
+            sets = ', '.join(self.set_update_column(c, 'updt', '>' if c in greatest_dates else '<' if c in least_dates else '=') for c in columns if c not in s_id + pk_columns)
             ases = ', '.join(s_id + columns)
             sql = (f'UPDATE {table_name} SET {sets} FROM (VALUES {values}) '
                    f'AS updt({ases}) WHERE {wheres} '
@@ -164,6 +167,17 @@ class Neon:
             sql += ';'
             
         self.execute(sql)
+        
+    def set_update_column(self, column, alias, comparison='='):
+        match comparison:
+            case '=':
+                update = f'{alias}.{column}'
+            case '>':
+                update = f'GREATEST({column}, {alias.column})'
+            case '<':
+                update = f'LEAST({column}, {alias.column})'
+        update_column = f'{column} = {update}'
+        return update_column
 
     def update_data_updates(self, table_name, start_date=None, end_date=None):
         sql = (f"INSERT INTO _data_updates (table_name, start_date, end_date) "
@@ -253,18 +267,23 @@ class Neon:
                )
         self.execute(sql)
 
-    def get_album_comparisons(self, user_id, allow_repeats=False):
+    def get_album_comparisons(self, user_id, excluded_categories=['single', 'playlist'], allow_repeats=False):
+        if excluded_categories:
+            excludes = 'AND category NOT IN (' + ', '.join(f"'{c}'" for c in excluded_categories) + ') '
+        else:
+            excludes = ''
+            
         if allow_repeats:
-            owned_with = (f"owned_categories AS "
-                          f"(SELECT category FROM release_categories WHERE category IN "
-                          f"(SELECT category FROM availabe_categories WHERE num_albums > 1)), "
+            owned_with = ('owned_categories AS '
+                          '(SELECT category FROM release_categories WHERE category IN '
+                          '(SELECT category FROM availabe_categories WHERE num_albums > 1)), '
                           )
-            first_pick_where = f'WHERE category IN (SELECT category FROM owned_categories) '
+            first_pick_where = 'WHERE category IN (SELECT category FROM owned_categories) '
             second_pick_where = ''
 
         else:
             owned_with = ''
-            first_pick_where = f'JOIN availabe_categories USING (user_id, category) WHERE num_played < num_albums'            
+            first_pick_where = 'JOIN availabe_categories USING (user_id, category) WHERE num_played < num_albums '            
             second_pick_where = 'AND NOT (SELECT played FROM first_pick) @> jsonb_build_array(source_id, album_uri) '
 
         sql = (f"WITH release_categories AS "
@@ -272,7 +291,7 @@ class Neon:
                f"COALESCE(wins || losses, jsonb_build_array(NULL)) AS played, "
                f"COALESCE(jsonb_array_length(wins || losses), 0) AS num_played "
                f"FROM ownerships JOIN album_categories USING (source_id, album_uri) "
-               f"WHERE user_id = {user_id} AND category NOT IN ('single', 'ep', 'playlist')), "
+               f"WHERE user_id = {user_id} {excludes}), "
                
                f"availabe_categories AS "
                f"(SELECT user_id, category, COUNT(*) AS num_albums FROM release_categories "
@@ -347,18 +366,6 @@ class Neon:
                  ),
                 ]
         self.execute(sqls)
-        
-        # # # update winner
-        # # sql = (f"UPDATE ownerships SET wins = COALESCE(wins, '[]'::jsonb) || {self.dbify([[source_id_l, album_uri_l]])} "
-        # #        f"WHERE user_id = {user_id} AND source_id = {source_id_w} AND album_uri = '{album_uri_w}' "
-        # #        f";")
-        # # self.execute(sql)
-
-        # # # update loser
-        # # sql = (f"UPDATE ownerships SET losses = COALESCE(losses, '[]'::jsonb) || {self.dbify([[source_id_w, album_uri_w]])} "
-        # #        f"WHERE user_id = {user_id} AND source_id = {source_id_l} AND album_uri = '{album_uri_l}' "
-        # #        f";")
-        # # self.execute(sql)
 
     def get_album_to_rate(self, user_id, unrated=False):
         wheres = ' AND rating IS NULL ' if unrated else ''

@@ -28,6 +28,9 @@ def set_up_users(neon):
     users = [set_up_user(neon, user_id) for user_id in neon.get_user_ids()]
     return users
 
+def is_updatable(df):
+    return (df is not None) and (not df.empty)
+
 def main():
     set_up_database(drop_tables=False, create_tables=True, drop_views=True, create_views=True, materialize=True)
 

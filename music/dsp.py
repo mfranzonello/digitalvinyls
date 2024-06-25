@@ -9,6 +9,8 @@ import statistics
 from collections import Counter
 import os
 from glob import glob
+import re
+from urllib import parse
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -21,12 +23,13 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
 from billboard import ChartData
 
 from common.calling import Caller, Printer
 from common.words import Texter
 from common.secret import get_secret, get_token, save_token
-from common.locations import SPOTIFY_AUTH_URL, MUSICBRAINZ_URL
+from common.locations import SPOTIFY_AUTH_URL, SOUNDCLOUD_PLAY_URL, SOUNDCLOUD_WIDGET_URL, MUSICBRAINZ_URL
 from common.structure import SPOTIFY_TOKENS_FOLDER, SPOTIFY_AUTHS_FOLDER, SPOTIFY_REDIRECT_URI, CRITICS_FOLDER, get_scope
 from library.wordbank import RemoveWords
 
@@ -43,6 +46,12 @@ class DSP:
 
 class Service(Printer, Caller):
     name = None
+    various_artist_uri = None
+    
+    vinyl_word = 'vinyl'
+    max_artists_on_album = 4
+    max_tracks_album_playlist = 30
+    # # min_album_tracks = 4
     
     api_rate_limit = 1
     def __init__(self):
@@ -57,6 +66,12 @@ class Service(Printer, Caller):
     
     def sleep(self):
         sleep(1/self.api_rate_limit)
+        
+    def announce(self, message):
+        print(f'{message} from {self.name}')
+        
+    def add_various_artist_id(self, various_artist_uri):
+        self.various_artist_uri = various_artist_uri
 
 
 class Spotter(DSP, Service):
@@ -65,10 +80,6 @@ class Spotter(DSP, Service):
     login_url = 'https://accounts.spotify.com/api'
     api_limit = 50 #100
     api_rate_limit = 3 # calls per second
-    
-    vinyl_word = 'vinyl'
-    max_artists_on_album = 4
-    max_tracks_album_playlist = 30
     
     def __init__(self):
         super().__init__()
@@ -87,7 +98,7 @@ class Spotter(DSP, Service):
         return headers #auth_header
     
     def get_access(self, user_id):
-        code = 'AQBozGvN-ipEs0fselrTIbcfqb23msKnSm0hUC1ePBlmZXKAO-vKBKvriEXnY5t7lZEAS_zFxmRlREIi7O7WA1CtsOR5KnHeUSDw6n7OBEGfvEW5DWv8Jry4OpeuGwNERnlyZy32KgM4hn4vB55D4bj_BjCcTX0lEljtpjH4IGkJlvmDNiXj9imO2sGOvNvrikZiY-L0oKNQ4GYtXhnXvb2nKL7p-Vkft19s4lewHwMHGT4VgaFzMzzDHwyCb5JXyc3O9VLurgDatnCbI3GndlZuH9c_eeJd4AWGMQeHXmKu4LsfFymH1R7bEJa7aXdYxtpX4I5hZeE'
+        code = ''
         #get_token(SPOTIFY_TOKENS_FOLDER, user_id)['code']
         url = f'{self.login_url}/token'
         data = {'grant_type': 'authorization_code',
@@ -154,68 +165,70 @@ class Spotter(DSP, Service):
         offset = 0
         
         # set up placeholders for results
-        info_1 = {}
-        info_2 = {}
-        info_3 = {}
+        info_albums = {}
+        info_artists = {}
+        info_ownerships = {}
         
         self.show_progress(offset, total)
         while total is None or offset < total:
             results = self.sp.current_user_saved_albums(limit=50, offset=offset)
             self.sleep()
-            info__1 = {}
-            info__2 = {}
-            info__3 = {}
+            info__albums = {}
+            info__artists = {}
+            info__ownerships = {}
             
             total = results['total']
             items = results['items']
             
-            info__1['artist_uris'] = [[artist['id'] for artist in item['album']['artists']] for item in items]
-            info__1['album_uri'] = [item['album']['id'] for item in items]
-            info__1['album_name'] = [item['album']['name'] for item in items]
-            info__1['image_src'] = [item['album']['images'][0]['url'] for item in items]
-            info__1['album_type'] = [item['album']['album_type'] for item in items]
-            info__1['track_uris'] = [[track['id'] for track in item['album']['tracks']['items']] for item in items]
-            info__1['album_duration'] = [sum(round(track['duration_ms']/(1000*60), 4) for track in item['album']['tracks']['items']) \
+            info__albums['artist_uris'] = [[artist['id'] for artist in item['album']['artists']] for item in items]
+            info__albums['album_uri'] = [item['album']['id'] for item in items]
+            info__albums['album_name'] = [item['album']['name'] for item in items]
+            info__albums['image_src'] = [item['album']['images'][0]['url'] for item in items]
+            info__albums['album_type'] = [item['album']['album_type'] for item in items]
+            info__albums['track_uris'] = [[track['id'] for track in item['album']['tracks']['items']] for item in items]
+            info__albums['album_duration'] = [sum(round(track['duration_ms']/(1000*60), 4) for track in item['album']['tracks']['items']) \
                                        for item in items]
-            info__1['upc'] = [item['album']['external_ids']['upc'] for item in items]
-            info__1['release_date'] = [self.convert_release_date(item['album']['release_date'],
+            info__albums['upc'] = [item['album']['external_ids']['upc'] for item in items]
+            info__albums['release_date'] = [self.convert_release_date(item['album']['release_date'],
                                                                  item['album']['release_date_precision']) for item in items]
 
-            info__2['artist_uri'] = [artist['id'] for item in items for artist in item['album']['artists']]
-            info__2['artist_name'] = [artist['name'] for item in items for artist in item['album']['artists']]
+            info__artists['artist_uri'] = [artist['id'] for item in items for artist in item['album']['artists']]
+            info__artists['artist_name'] = [artist['name'] for item in items for artist in item['album']['artists']]
 
-            info__3['album_uri'] = info__1['album_uri']
-            info__3['like_date'] = [item['added_at'] for item in items]
+            info__ownerships['album_uri'] = info__albums['album_uri']
+            info__ownerships['like_date'] = [item['added_at'] for item in items]
+
+            info__albums['availability'] = [item['album']['available_markets'] for item in items]
             
-            for i_0, i__0 in zip([info_1, info_2, info_3], [info__1, info__2, info__3]):
+            for i_0, i__0 in zip([info_albums, info_artists, info_ownerships], [info__albums, info__artists, info__ownerships]):
                 for key in i__0.keys():
                     i_0[key] = i_0.get(key, []) + i__0[key]
                                                                         
             offset += len(items)
             self.show_progress(offset, total)
 
-        albums_df = DataFrame(info_1)
-        artists_df = DataFrame(info_2).drop_duplicates()
-        ownerships_df = DataFrame(info_3)
-        
+        albums_df = DataFrame(info_albums)
+        artists_df = DataFrame(info_artists).drop_duplicates()
+        ownerships_df = DataFrame(info_ownerships)
+
         return albums_df, artists_df, ownerships_df
     
     # # def get_albums_info(self):
     # #     return albums_df, artists_df, ownerships_df
     
     ''' extract saved playlists '''
-    def get_playlists(self, various_artist_uri=None):
-        albums_df, artists_df, ownerships_df = self.get_playlists_data(various_artist_uri)
+    def get_playlists(self):
+        albums_df, artists_df, ownerships_df = self.get_playlists_data()
         
         return albums_df, artists_df, ownerships_df
         
-    def get_favorites(self, various_artist_uri=None):
+    def get_favorites(self):
         pass
         
         #return albums_df, artists_df, ownerships_df
         
-    def get_playlists_data(self, various_artist_uri=None):
-        print('getting playlists data')
+    def get_playlists_data(self):
+        self.announce('getting playlists data')
         total = None
         offset = 0
         
@@ -236,21 +249,21 @@ class Spotter(DSP, Service):
             self.show_progress(offset, total)
             
         if len(possible_lists):
-            albums_df, artists_df, ownerships_df = self.get_playlist_info(possible_lists, various_artist_uri)
+            albums_df, artists_df, ownerships_df = self.get_playlist_info(possible_lists)
                 
         return albums_df, artists_df, ownerships_df
     
-    def get_playlist_info(self, possible_lists, various_artist_uri):
-        print('analyzing playlists')
-        info_1 = {}
-        info_2 = {}
-        info_3 = {}
+    def get_playlist_info(self, possible_lists):
+        self.announce('analyzing playlists')
+        info_albums = {}
+        info_artists = {}
+        info_ownerships = {}
         total_lists = len(possible_lists)
         for p, (p_list, count) in enumerate(possible_lists):
             self.show_progress(p, total_lists)
-            info__1 = {}
-            info__2 = {}
-            info__3 = {}
+            info__albums = {}
+            info__artists = {}
+            info__ownerships = {}
                 
             results = self.sp.playlist(p_list)
             self.sleep()
@@ -319,36 +332,36 @@ class Spotter(DSP, Service):
                             upc = None
                             
                     # albums
-                    info__1['album_uri'] = [album_uri]
-                    info__1['album_name'] = [album_name]
-                    info__1['album_type'] = [album_type]
-                    info__1['upc'] = [upc]
-                    info__1['image_src'] = [image_src]
+                    info__albums['album_uri'] = [album_uri]
+                    info__albums['album_name'] = [album_name]
+                    info__albums['album_type'] = [album_type]
+                    info__albums['upc'] = [upc]
+                    info__albums['image_src'] = [image_src]
                                 
-                    info__1['track_uris'] = [[t['track']['id'] for t in items]]
+                    info__albums['track_uris'] = [[t['track']['id'] for t in items]]
                     artist_uris = [[a['id'] for a in t['track']['artists']] for t in items]
-                    info__1['artist_uris'] =  [artist_uris] if len(artist_uris) <= self.max_artists_on_album else [[various_artist_uri]]
-                    info__1['album_duration'] = [sum(t['track']['duration_ms'] for t in items)/(1000*60)]
-                    info__1['release_date'] = [max(self.convert_release_date(t['track']['album']['release_date'],
+                    info__albums['artist_uris'] =  [artist_uris] if len(artist_uris) <= self.max_artists_on_album else [[self.various_artist_uri]]
+                    info__albums['album_duration'] = [sum(t['track']['duration_ms'] for t in items)/(1000*60)]
+                    info__albums['release_date'] = [max(self.convert_release_date(t['track']['album']['release_date'],
                                                                              t['track']['album']['release_date_precision']) \
                                                                                     for t in items)]
                     
                     # artists
-                    info__2['artist_uri'] = [a['id'] for t in items for a in t['track']['artists']]
-                    info__2['artist_name'] = [a['name'] for t in items for a in t['track']['artists']]
+                    info__artists['artist_uri'] = [a['id'] for t in items for a in t['track']['artists']]
+                    info__artists['artist_name'] = [a['name'] for t in items for a in t['track']['artists']]
 
                     # ownerships
-                    info__3['album_uri'] = [album_uri]
-                    info__3['like_date'] = [min(t['added_at'] for t in items)]
+                    info__ownerships['album_uri'] = [album_uri]
+                    info__ownerships['like_date'] = [min(t['added_at'] for t in items)]
                 
-                    for i_0, i__0 in zip([info_1, info_2, info_3], [info__1, info__2, info__3]):
+                    for i_0, i__0 in zip([info_albums, info_artists, info_ownerships], [info__albums, info__artists, info__ownerships]):
                         for key in i__0.keys():
                             i_0[key] = i_0.get(key, []) + i__0[key]
         
         self.show_progress(total_lists, total_lists)
-        albums_df = DataFrame(info_1)
-        artists_df = DataFrame(info_2).drop_duplicates()
-        ownerships_df = DataFrame(info_3)
+        albums_df = DataFrame(info_albums)
+        artists_df = DataFrame(info_artists).drop_duplicates()
+        ownerships_df = DataFrame(info_ownerships)
 
         return albums_df, artists_df, ownerships_df
     
@@ -402,93 +415,93 @@ class Spotter(DSP, Service):
 
     ''' extract other fields '''
     def get_tracks_data(self, tracks_df):
-        print('getting track data')
+        self.announce('getting track data')
         tracks_df = self.get_tracks_info(tracks_df['track_uri'].to_list())
         
         return tracks_df
     
     def get_tracks_info(self, track_uris):
         total_rows = len(track_uris)
-        info_0 = {}
+        info_tracks = {}
         max_rows = ceil(total_rows/self.api_limit)
         for i in range(max_rows):
             self.show_progress(i, max_rows)
             track_uris__0 = track_uris[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
-            info__0 = {}
+            info__tracks = {}
             
             results = self.sp.tracks(track_uris__0)
             self.sleep()
             
-            info__0['track_uri'] = track_uris__0  
-            info__0['track_name'] = [t['name'] for t in results['tracks']]
-            info__0['artist_uris'] = [[a['id'] for a in t['artists']] for t in results['tracks']]
-            info__0['isrc'] = [t['external_ids']['isrc'] for t in results['tracks']]
-            info__0['track_duration'] = [round(t['duration_ms']/(1000*60), 4) for t in results['tracks']]
-            info__0['explicit'] = [t['explicit'] for t in results['tracks']]
+            info__tracks['track_uri'] = track_uris__0  
+            info__tracks['track_name'] = [t['name'] for t in results['tracks']]
+            info__tracks['artist_uris'] = [[a['id'] for a in t['artists']] for t in results['tracks']]
+            info__tracks['isrc'] = [t['external_ids']['isrc'] for t in results['tracks']]
+            info__tracks['track_duration'] = [t['duration_ms']/(1000*60) for t in results['tracks']]
+            info__tracks['explicit'] = [t['explicit'] for t in results['tracks']]
                         
-            for key in info__0.keys():
-                info_0[key] = info_0.get(key, []) + info__0[key]
+            for key in info__tracks.keys():
+                info_tracks[key] = info_tracks.get(key, []) + info__tracks[key]
 
         self.show_progress(max_rows, max_rows)
-        tracks_df = DataFrame(info_0)
+        tracks_df = DataFrame(info_tracks)
         
         return tracks_df
 
     def get_soundtracks_data(self, tracks_df):
-        print('getting soundtrack data')
+        self.announce('getting soundtrack data')
         tracks_df = self.get_soundtrack_info(tracks_df['track_uri'].to_list())
         return tracks_df
     
     def get_soundtrack_info(self, track_uris):
         total_rows = len(track_uris)
-        info_0 = {}
+        info_tracks = {}
         max_rows = ceil(total_rows/self.api_limit)
         for i in range(max_rows):
             self.show_progress(i, max_rows)
             track_uris__0 = track_uris[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
-            info__0 = {}
+            info__tracks = {}
             
             results = self.sp.audio_features(track_uris__0)
             self.sleep()
             
-            info__0['track_uri'] = track_uris__0
-            info__0['instrumentalness'] = [t['instrumentalness'] if t else 0 for t in results]
+            info__tracks['track_uri'] = track_uris__0
+            info__tracks['instrumentalness'] = [t['instrumentalness'] if t else 0 for t in results]
             
-            for key in info__0.keys():
-                info_0[key] = info_0.get(key, []) + info__0[key]
+            for key in info__tracks.keys():
+                info_tracks[key] = info_tracks.get(key, []) + info__tracks[key]
 
         self.show_progress(max_rows, max_rows)
-        tracks_df = DataFrame(info_0)
+        tracks_df = DataFrame(info_tracks)
         
         return tracks_df
     
     def get_artists_data(self, artists_df):
-        print('getting artists data')
+        self.announce('getting artists data')
         tracks_df = self.get_artists_info(artists_df['artist_uri'].to_list())
         
         return tracks_df
     
     def get_artists_info(self, artist_uris):
         total_rows = len(artist_uris)
-        info_0 = {}
+        info_artists = {}
         max_rows = ceil(total_rows/self.api_limit)
         for i in range(max_rows):
             self.show_progress(i, max_rows)
             artist_uris__0 = artist_uris[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
-            info__0 = {}
+            info__artists = {}
             
             results = self.sp.artists(artist_uris__0)
             self.sleep()
             
-            info__0['artist_uri'] = artist_uris__0
-            info__0['artist_name'] = [a['name'] for a in results['artists']]
-            info__0['genres'] = [a['genres'] for a in results['artists']]
+            info__artists['artist_uri'] = artist_uris__0
+            info__artists['artist_name'] = [a['name'] for a in results['artists']]
+            info__artists['genres'] = [a['genres'] for a in results['artists']]
             
-            for key in info__0.keys():
-                info_0[key] = info_0.get(key, []) + info__0[key]
+            for key in info__artists.keys():
+                info_artists[key] = info_artists.get(key, []) + info__artists[key]
 
         self.show_progress(max_rows, max_rows)
-        artists_df = DataFrame(info_0)
+        artists_df = DataFrame(info_artists)
         
         return artists_df
 
@@ -507,6 +520,8 @@ class Spotter(DSP, Service):
 
 class Sounder(DSP, Service):
     name = 'SoundCloud'
+    play_url = SOUNDCLOUD_PLAY_URL
+    widget_url = SOUNDCLOUD_WIDGET_URL
     
     def __init__(self):
         super().__init__()
@@ -521,36 +536,316 @@ class Sounder(DSP, Service):
         
         chrome_options = Options()
         chrome_options.add_argument('--headless=new')
+        chrome_options.add_argument('--mute-audio')
         self.driver = webdriver.Chrome(options=chrome_options)
 
     def disconnect(self):
         self.driver.quit()
         
     def get_albums(self):
-        return None, None, None
-    
-        # # url = f'https://soundcloud.com/{self.username}'
-        
-        # # for page in ['likes', 'albums']:
-        # #     page_length = 0
-        # #     self.driver.get(f'{url}/{page}')
-        # #     elem = self.driver.find_element(By.TAG_NAME, 'body')
-            
-        # #     while len(self.driver.page_source) > page_length:
-        # #         page_length = len(self.driver.page_source)
-        # #         elem.send_keys(Keys.PAGE_DOWN)
-        # #         sleep(0.2)
-        
-        # #     elems = self.driver.find_elements(By.CLASS_NAME, 'soundList__item')
-        # #     print(len(elems))
-
-        # # return
-
-    def get_playlists(self):
-        return None, None, None
+        self.announce('getting album data')
+        albums_df, artists_df, ownerships_df = self.get_releases('albums')
+        return albums_df, artists_df, ownerships_df
 
     def get_favorites(self):
-        return None, None, None    
+        self.announce('getting favorites data')
+        albums_df, artists_df, ownerships_df = self.get_releases('likes')
+        return albums_df, artists_df, ownerships_df
+
+    def get_releases(self, page):
+        info_albums = {}
+        info_artists = {}
+        info_ownerships = {}
+        
+        page_length = 0
+        self.driver.get(f'{self.play_url}/{self.username}/{page}')
+        elem = self.find_element(self.driver, By.TAG_NAME, 'body')
+            
+        # fully load page
+        while len(self.driver.page_source) > page_length:
+            page_length = len(self.driver.page_source)
+            elem.send_keys(Keys.PAGE_DOWN)
+            sleep(0.2)
+        
+        playlist_elements = self.find_elements(self.driver, By.CLASS_NAME, 'soundList__item')
+        if playlist_elements:
+            total_playlists = len(playlist_elements)
+            album_urls = []
+            for i, playlist_element in enumerate(playlist_elements):
+                self.show_progress(i, total_playlists)
+                release_element = self.find_element(playlist_element, By.CLASS_NAME, 'sound__trackList')
+                    
+                # check that it could be a playlist
+                if release_element:
+                    title_element = self.find_element(playlist_element, By.CLASS_NAME, 'soundTitle__title')
+                        
+                    # check that there are tracks
+                    if self.find_element(playlist_element, By.CLASS_NAME, 'compactTrackList__item'):
+                        info__albums = {}
+                        info__artists = {}
+                        info__ownerships = {}
+                        
+                        album_url = title_element.get_attribute('href')
+                        album_urls.append(album_url)
+                        item = self.get_oembed(album_url)
+                        artist_uri = self.extract_uri_from_url(item['author_url'])
+                        artist_name = item['author_name']
+                        date_element = self.find_element(playlist_element, By.CLASS_NAME, 'releaseDateCompact')
+
+                        if date_element:
+                            album_type = 'album'
+                        else:
+                            album_type = 'playlist'
+                        
+                        info__albums['artist_uris'] = [[artist_uri]]
+                        info__albums['album_uri'] = [self.extract_uri_from_html(item['html'], 'playlist')]
+                        info__albums['album_name'] = [self.extract_name_from_title(item['title'], artist_name)[0]]
+                        info__albums['image_src'] = [item['thumbnail_url']]
+                        info__albums['album_type'] = [album_type]
+                        ##info__albums['upc'] = [None]
+
+                        info__artists['artist_uri'] = [artist_uri]
+                        info__artists['artist_name'] = [artist_name]
+
+                        info__ownerships['album_uri'] = info__albums['album_uri']
+                        info__ownerships['like_date'] = [datetime.today().date()]
+                        
+                        for i_0, i__0 in zip([info_albums, info_artists, info_ownerships], [info__albums, info__artists, info__ownerships]):
+                            for key in i__0.keys():
+                                i_0[key] = i_0.get(key, []) + i__0[key]
+            self.show_progress(total_playlists, total_playlists)
+                
+            existing_keys = info__albums.keys()
+            for i, album_url in enumerate(album_urls):
+                self.show_progress(i, total_playlists)
+                info__albums = {}
+                info__tracks = self.get_tracklist(album_url)
+                for key in info__tracks.keys():
+                    if key in existing_keys:
+                        info_albums[key][i] = info__tracks[key]
+                    else:
+                        info_albums[key] = info_albums.get(key, []) + [info__tracks[key]]
+            self.show_progress(total_playlists, total_playlists)
+                                
+        albums_df = DataFrame(info_albums)
+        artists_df = DataFrame(info_artists).drop_duplicates()
+        ownerships_df = DataFrame(info_ownerships)
+        
+        return albums_df, artists_df, ownerships_df
+
+    def get_tracklist(self, album_url):
+        self.announce('analyzing albums')
+        self.driver.get(album_url)
+        sleep(2)
+                    
+        # check if there are more tracks
+        more_element = self.find_element(self.driver, By.CLASS_NAME, 'compactTrackList__moreLink')
+        if more_element:
+            more_element.click()
+            
+        title_elements = self.find_elements(self.driver, By.CLASS_NAME, 'trackItem__trackTitle')
+        track_uris = []
+        for title_element in title_elements:
+            track_url = title_element.get_attribute('href')
+            item = self.get_oembed(track_url)
+            track_uris.append(self.extract_uri_from_html(item['html'], 'track'))
+       
+        # get album duration
+        duration_element = self.find_element(self.driver, By.CLASS_NAME, 'genericTrackCount__duration') # MM:SS
+        if duration_element.text:
+            minutes, seconds = duration_element.text.split(':')
+            album_duration = int(minutes) + int(seconds)/60 
+        else:
+            album_duration = None
+        
+        # look for the release date
+        time_element = self.find_element(self.driver, By.CLASS_NAME, 'relativeTime')
+        listen_element = self.find_element(self.driver, By.CLASS_NAME, 'listenInfo__releaseData') # DD mmm YYY
+        if time_element:
+            r_date = time_element.get_attribute('title') # or datetime="2019-03-04T20:03:55.000Z"
+        elif listen_element:
+            r_date = listen_element.text
+        release_date = datetime.strptime(r_date,  '%d %B %Y').date()
+        
+        # update album type to soundtrack if it's in the tag
+        tag_element = self.find_element(self.driver, By.CLASS_NAME, 'sc-tag')
+        album_type = None
+        if tag_element:
+            if 'soundtrack' in tag_element.text.lower():
+                album_type = 'soundtrack'
+        
+        info__tracks = {}
+        info__tracks['track_uris'] = track_uris
+        info__tracks['album_duration'] = album_duration
+        info__tracks['release_date'] = release_date
+        if album_type:
+            info__tracks['album_type'] = album_type
+
+        return info__tracks        
+
+    def get_tracks_data(self, tracks_df):
+        self.announce('getting track data')
+        
+        info_tracks = {}
+        max_rows = len(tracks_df)
+        for i, track_uri in enumerate(tracks_df['track_uri']):
+            self.show_progress(i, max_rows)
+            info__tracks = {}
+            # use widget to get the url
+            self.driver.get(f'{self.widget_url}/tracks/{track_uri}')
+            sleep(1)
+            button_element = self.find_element(self.driver, By.CLASS_NAME, 'soundHeader__shareButton')
+            button_element.click()
+            link_code_input = self.find_element(self.driver, By.CLASS_NAME, 'sharePanel__linkCodeInput')
+            
+            if link_code_input:
+                # get trackname and artist info from oembed
+                link_code = link_code_input.get_attribute('value')
+                url = link_code[:link_code.index('?utm_source')]
+                item = self.get_oembed(url)
+                artist_name = item['author_name']
+                track_name, true_artist_name = self.extract_name_from_title(item['title'], artist_name)
+                
+                if artist_name == true_artist_name:
+                    artist_uri = self.extract_uri_from_url(item['author_url'])
+                else:
+                    artist_uri = self.get_artist_uri(true_artist_name)
+
+                # get track duration from webpage
+                self.driver.get(link_code[:link_code.index('?utm_source')])
+                sleep(1)
+                timeline_element = self.find_element(self.driver, By.CLASS_NAME, 'playbackTimeline__duration')
+                span_element = timeline_element.find_element(By.XPATH, './/span[@aria-hidden="true"]')
+                minutes, seconds = span_element.text.split(':')
+                duration = int(minutes) + int(seconds)/60
+
+                info__tracks['track_uri'] = [track_uri]
+                info__tracks['track_name'] = [track_name]
+                info__tracks['artist_uris'] = [[artist_uri]]
+                info__tracks['track_duration'] = [duration]
+                
+                for key in info__tracks.keys():
+                    info_tracks[key] = info_tracks.get(key, []) + info__tracks[key]
+
+        self.show_progress(max_rows, max_rows)
+        tracks_df = DataFrame(info_tracks)
+        
+        return tracks_df
+    
+    def get_artist_uri(self, artist_name):
+        self.driver.get(f'{self.play_url}/search/people?q={parse.quote(artist_name)}')
+        sleep(1)
+
+        # search through results for verified or most popular
+        verified = False
+        follows = []
+        people_items = self.find_elements(self.driver, By.CLASS_NAME, 'searchList__item')
+        for people_item in people_items:
+            if self.find_element(people_item, By.CLASS_NAME, 'verifiedBadge'):
+                verified = True
+                break
+            mini_stats_element = self.find_element(people_item, By.CLASS_NAME, 'sc-ministats-item')
+            follower_count = int(mini_stats_element.get_attribute('title')[:-len(' followers')].replace(',', ''))
+            follows.append(follower_count)
+        if not verified:
+            people_item = people_items[follows.index(max(follows))]
+        
+        link_element = self.find_element(people_item, By.CLASS_NAME, 'sc-link-primary')
+        artist_uri = link_element.get_attribute('href')[:-len(self.play_url + ' ')]
+
+        return artist_uri
+        
+    def get_artist_data(self, artists_df):
+        self.announce('getting artist data')
+        
+        info_artists = {}
+        max_rows = len(artists_df)
+        for i, artist_uri in enumerate(artists_df['artist_uris']):
+            info__artists = {}
+            self.show_progress(i, max_rows)
+
+            url = f'{self.play_url}/{artist_uri}'
+            item = self.get_oembed(url)
+
+            info__artists['artist_uri'] = [artist_uri]
+            info__artists['artist_name'] = [item['author_name']]
+
+            for key in info__artists.keys():
+                info_artists[key] = info_artists.get(key, []) + info__artists[key]
+
+        self.show_progress(max_rows, max_rows)
+        artists_df = DataFrame(info_artists)
+        
+        return artists_df
+                        
+    def find_element(self, parent, by, name):
+        return self.check_elements(parent, by, name, multiple=False)
+
+    def find_elements(self, parent, by, name):
+        return self.check_elements(parent, by, name, multiple=True)
+    
+    def check_elements(self, parent, by, name, multiple):
+        try:
+            if multiple:
+                elements = parent.find_elements(by, name)
+            else:
+                elements = parent.find_element(by, name)
+        except NoSuchElementException:
+            elements = None
+        return elements
+
+    def get_oembed(self, url):
+        response = requests.get(url=f'{self.play_url}/oembed', params={'url': url, 'format': 'json'})
+        if response.ok:
+            item = response.json()
+        else:
+            item = {}
+        return item
+        
+    def extract_uri_from_html(self, html, uri_type):
+        uri = html[html.index(f'{uri_type}s%2F')+len(f'{uri_type}s%2F'):html.index('&show_artwork')]
+        return uri
+
+    def extract_uri_from_url(self, url):
+        uri = url[url.rindex('/')+1:]
+        return uri
+        
+    def extract_name_from_title(self, title, artist_name):
+        # remove SoundCloud add-on
+        name = title[:-len(' by ' + artist_name)]
+        
+        # remove artist name
+        artist_patterns = [rf'^{re.escape(artist_name)} - (.+)$',  # matches 'artist - song title'
+                           rf'^{re.escape(artist_name)}\s+(.+)$',  # matches 'artist  song title'
+                           r'^(.+?)\s{3}(.+)$',                    # matches 'other artist   song title'
+                           r'^(.+)$',                              # matches 'song title'
+                           ]
+        number_patterns = [rf'^{re.escape(artist_name)} - (.+)$',  # matches 'artist - song title'
+                           rf'^{re.escape(artist_name)}\s+(.+)$',  # matches 'artist  song title'
+                           r'^(.+?)\s{3}(.+)$',                    # matches 'other artist   song title'
+                           r'^(.+)$',                              # matches 'song title'
+                           ]
+
+        for pattern in artist_patterns:
+            match = re.match(pattern, name)
+            if match:
+                if pattern == artist_patterns[2]:
+                    name = match.group(2)
+                    artist_name = match.group(1)  # return song title and true artist
+                else:
+                    name = match.group(1) # return song title and original artist
+
+        # remove leading track number -> this will overcorrect if it's not actually a track number
+        match = re.match(r'^(\d{1,2})\s+(.*)', name)
+        if match:
+            number = int(match.group(1))
+            if 0 <= number < 30: # assume albums have less than 30 songs
+                name = match.group(2)
+        
+        return name, artist_name
+    
+    def get_soundtracks_data(self, tracks_df):
+        return tracks_df
         
 
 class MusicBrainer(Service, Texter):
@@ -784,7 +1079,7 @@ class BBer(Service):
     def get_billboard_albums(self, start_date, end_date, limit=100):
         restrictions = start_date and end_date
         i_range = range((datetime.today() - self.chart_start).days // 7 + 1)
-        chart_range = [(self.chart_start + timedelta(days=i*7)) for i in i_range]
+        chart_range = [(self.chart_start + timedelta(days=i*7)) for i in i_range[::-1]]
         date_range = [d.strftime('%Y-%m-%d') for d in chart_range if (not restrictions) or not (start_date <= d.date() <= end_date)]        
         if limit:
             date_range = date_range[-limit:]

@@ -49,7 +49,6 @@ class SQLer:
                            ['track_uris', 'jsonb'],
                            ['album_duration', 'numeric'],
                            ['upc', 'varchar'],
-                           ['release_id', 'serial']
                            ],         
                'pk': ['source_id', 'album_uri'],
                'fk': [[['source_id'], 'sources'],
