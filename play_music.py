@@ -10,10 +10,7 @@ def set_up_speakers():
     sonoser.get_households()
     sonoser.get_groups_and_players()
     sonoser.set_party_mode()
-
-    # # print(sonoser.groups)
-    # # print(sonoser.players)
-    
+   
     return sonoser
 
 def play_albums(neon, sonoser):
@@ -22,10 +19,7 @@ def play_albums(neon, sonoser):
     turntable.add_users(users)
     turntable.play_music(neon, sonoser)
     
-    # # print(sonoser.access_token)
-    # # print(sonoser.household_id)
-    # # print(sonoser.groups)
-def man():
+def main():
     neon = set_up_database()
     sonoser = set_up_speakers()
     play_albums(neon, sonoser)

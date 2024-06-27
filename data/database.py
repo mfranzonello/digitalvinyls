@@ -3,6 +3,7 @@
 from datetime import datetime, date as dtdate
 import json
 import time
+from collections import Counter
 
 from pandas import read_sql, isna
 from numpy import integer, floating
@@ -126,6 +127,37 @@ class Neon:
         self.execute(SQLer.drop_views())
 
         
+    ''' ensure the right configuration is in place '''
+    def create_keywords(self, keywords_df):
+        pass
+
+    def add_service(self, service_name, sources=[], various_artists_id=None):
+        sql = (f"WITH new_service_id AS "
+               f"(INSERT INTO services (service_name, various_artist_id) "
+               f"VALUES ({service_name}, {various_artists_id}) RETURNING service_id) "
+               f"INSERT INTO sources (service_id, source_name) "
+               f"VALUES (new_service_id, {self.dbify(sources)}) "
+               f";"
+               )
+        self.execute(sql)
+        
+    def add_user(self, first_name, last_name, image_src=None):
+        sql = (f"INSERT INTO users (first_name, last_name, image_src) "
+               f"VALUES ({first_name}, {last_name}, {image_src}) "
+               f"RETURNING user_id;"
+               )
+        user_id = self.execute(sql)
+        return user_id
+        
+    def update_user(self, user_id, first_name=None, last_name=None, image_src=None, service_user_ids=None):
+        attributes = ['first_name', 'last_name', 'image_src']
+        attribute_cols = [first_name, last_name, image_src]
+        set_attributes = [f'{a} = {self.dbify(c)}' for a, c in zip(attributes, attribute_cols) if c is not None]
+        set_service = f'service_user_ids = service_user_ids || {self.dbify(service_user_ids)}' if service_user_ids else ''
+        sets = ', '.join(set_attributes + set_service)
+        sql = f'"UPDATE users SET {sets} WHERE user_id = {user_id};'
+        self.execute(sql)
+
     ''' update data from pull '''
     def update_service_table(self, df, table_name, columns, pk_columns, service_id=None, source_id=None, update_only=False, drop=None,
                              least_dates=[], greatest_dates=[]):
@@ -134,6 +166,7 @@ class Neon:
         s_id = ['service_id'] if service_id else ['source_id'] if source_id else []
         s_id_v = f'{self.dbify(service_id)}, ' if service_id else f'{self.dbify(source_id)}, ' if source_id else ''
         values = ', '.join('(' + s_id_v + ', '.join(self.dbify(v) for v in r) + ')' for r in df[columns].values)
+        updatable = Counter(columns) != Counter(pk_columns)
             
         if drop or update_only:
             wheres = ' AND '.join(f'updt.{c} = {table_name}.{c}' for c in s_id + pk_columns)
@@ -145,25 +178,28 @@ class Neon:
             # upserting
             conflict_columns = ', '.join(s_id + pk_columns)
             excludes = ', '.join(f'{c} = EXCLUDED.{c}' for c in columns if c not in pk_columns)
+            do_update = f'UPDATE SET {excludes}' if updatable else 'NOTHING'
             sql = (f'INSERT INTO {table_name} ({insert_columns}) VALUES {values} '
-                   f'ON CONFLICT ({conflict_columns}) DO UPDATE SET {excludes} '
+                   f'ON CONFLICT ({conflict_columns}) DO {do_update} '
                    )
         else:
             # updating
-            sets = ', '.join(self.set_update_column(c, 'updt', '>' if c in greatest_dates else '<' if c in least_dates else '=') for c in columns if c not in s_id + pk_columns)
-            ases = ', '.join(s_id + columns)
-            sql = (f'UPDATE {table_name} SET {sets} FROM (VALUES {values}) '
-                   f'AS updt({ases}) WHERE {wheres} '
-                   )
-            
-        if drop:
-            drops = ', '.join(drop)
-            sql = (f"WITH upsert AS ({sql} RETURNING {conflict_columns}) "
-                   f"DELETE FROM {table_name} WHERE ({drops}) IN (SELECT DISTINCT {drops} FROM upsert) "
-                   f"AND ({conflict_columns}) NOT IN (SELECT {conflict_columns} FROM upsert) "
-                   f";"
-                   )
-        else:
+            if updatable:
+                sets = ', '.join(self.set_update_column(c, 'updt', '>' if c in greatest_dates else '<' if c in least_dates else '=') for c in columns if c not in s_id + pk_columns)
+                ases = ', '.join(s_id + columns)
+                sql = (f'UPDATE {table_name} SET {sets} FROM (VALUES {values}) '
+                       f'AS updt({ases}) WHERE {wheres} '
+                       )
+            else:
+                sql = None
+                
+        if sql:
+            if drop:
+                drops = ', '.join(drop)
+                sql = (f"WITH upsert AS ({sql} RETURNING {conflict_columns}) "
+                       f"DELETE FROM {table_name} WHERE ({drops}) IN (SELECT DISTINCT {drops} FROM upsert) "
+                       f"AND ({conflict_columns}) NOT IN (SELECT {conflict_columns} FROM upsert) "
+                       )
             sql += ';'
             
         self.execute(sql)
@@ -235,10 +271,6 @@ class Neon:
     def update_critics(self, lists_df):
         columns = ['critic_name', 'list_year', 'list_position', 'album_name', 'artist_names']
         self.update_service_table(lists_df, 'critics', columns, ['critic_name', 'list_year', 'list_position'])
-
-    def update_user(self, user):
-        columns = ['user_id', 'first_name', 'last_name', 'service_user_ids', 'image_src']
-        self.update_service_table(user, 'users', columns, ['user_id'])
         
     # # def update_series(self, user_id, series_name, artist_uri=None, artist_name=None, album_name_pattern=None, album_not_pattern=None):
     # #     artist_yes = f'artist_uris ? {self.dbify(artist_uri)}' if artist_uri else None

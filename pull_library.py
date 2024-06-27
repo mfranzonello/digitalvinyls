@@ -1,7 +1,10 @@
 ''' Fill out library '''
 
 from setup import set_up_database, is_updatable
-from music.dsp import Spotter, Sounder, MusicBrainer
+from music.spotify import Spotter
+from music.soundcloud import Sounder
+from music.onedrive import Driver
+from music.musicbrainz import MusicBrainer
         
 def update_tracks(neon, DSPs):
     for S in DSPs:
@@ -74,7 +77,7 @@ def update_barcodes(neon):
 def main():
     neon = set_up_database()
     
-    DSPs = [Spotter, Sounder]
+    DSPs = [Driver] #Spotter, Sounder]
      
     update_tracks(neon, DSPs)
     update_artists(neon, DSPs)

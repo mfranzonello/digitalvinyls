@@ -8,6 +8,10 @@ def set_up_database(drop_tables=False, drop_views=False, create_tables=False, cr
     neon.connect()
     if drop_tables:
         neon.drop_tables()
+    # # if keywords:
+    # #     neon.create_keywords()
+    # # if services:
+    # #     neon.add_services()
     if create_tables:
         neon.create_tables()
     if drop_views:

@@ -11,8 +11,8 @@ from soco.music_services import MusicService
 from pandas import DataFrame
 
 from common.calling import Caller
-from common.locations import SONOS_LOGIN_URL, SONOS_CONTROL_URL
-from common.structure import SONOS_TOKENS_FOLDER, SONOS_REDIRECT_URI, SONOS_HOST, SONOS_PORT
+from common.structure import (SONOS_LOGIN_URL, SONOS_CONTROL_URL, SONOS_TOKENS_FOLDER, SONOS_REDIRECT_URI,
+                              SONOS_HOST, SONOS_PORT)
 from common.secret import get_secret, get_token, save_token
 from common.entry import Stroker
 from music.listeners import Picker
@@ -100,7 +100,7 @@ class Sonoser(Caller):
     def set_party_mode(self, volume=None):
         if len(self.groups) > 1:
             url = f'{self.control_url}/households/{self.household_id}/groups/createGroup'
-            data = {'playerIds': [p['id'] for p in self.players],
+            data = {'playerIds': [p for p in self.players],
                     'musicContextGroupId': self.controller_id
                     }
             response = requests.post(url, data=data, headers=self.get_headers())

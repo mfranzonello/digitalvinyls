@@ -1,0 +1,26 @@
+neon:
+  host: us-east-1.aws.neon.tech
+  db_name: digitalvinyl
+  username: digitalvinyl_owner
+
+sonos:
+  host: 'https://localhost'
+  port: 5005
+  redirect_uri: https%3A%2F%2Feokzlc0pkizkpxl.m.pipedream.net
+  release_types: [playlist, favorite]
+
+spotify:
+  redirect_uri: https%3A%2F%2Feokzlc0pkizkpxl.m.pipedream.net
+  scope: [user-read-private, user-read-email, user-library-read, user-read-playback-state, user-modify-playback-state, playlist-read-private]
+  vinyl_playlist_word: vinyl
+  release_types: [single, album, compilation]
+  
+soundcloud:
+  release_types: [playlist, album, soundtrack]
+
+azure:
+  redirect_uri: 'http://localhost:5000/'
+  tenant_id: 35def8fb-9e1f-49bf-8066-da907d23cf45
+  scope: [User.Read, Files.ReadWrite]
+  vinyl_folder_path: 'music/vinyls'
+  release_types: [single, ep, album]

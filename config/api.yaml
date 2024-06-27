@@ -1,0 +1,41 @@
+github:
+  urls:
+    env: https://api.github.com
+
+spotify:
+  urls:
+    play: https://open.spotify.com
+    auth: https://accounts.spotify.com
+    login: https://accounts.spotify.com/api
+  limits:
+    rate: 3
+    query: 50
+
+sonos:
+  urls:
+    login: https://api.sonos.com/login/v3
+    control: https://api.ws.sonos.com/control/api/v1
+    
+soundcloud:
+  urls:
+    play: https://soundcloud.com
+    widget: https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com
+  limits:
+    rate: 1
+
+azure:
+  urls:
+    login: https://login.microsoftonline.com/common/oauth2/v2.0
+    graph: https://graph.microsoft.com/v1.0
+  limits:
+    rate: 5
+
+musicbrainz:
+  urls:
+    search: https://musicbrainz.org/ws/2
+  limits:
+    rate: 1
+
+billboard:
+  limits:
+    rate: 1

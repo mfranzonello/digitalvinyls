@@ -1,0 +1,17 @@
+keywords:
+  soundtrack: [soundtrack, motion picture, music from, suite]
+  good_repeat: [interlude, ii, continued, reprise, epilouge, revisited]
+  bad_repeat: [\-, voice memo, spotify sessions, remix, demo, feat., instrumental, \(%version%\)]
+  good_short: [interlude, foreward, intro, \(\(%\)\)]
+
+music_values:
+  score_instrumental: 0.5
+  min_ep_tracks: 4
+  min_album_tracks: 7
+  min_album_duration: 20
+  min_track_duration: 20
+  min_release_span: 3
+
+critics:
+  max_stars: 5
+  max_critics_points: 500  # need to ensure that anything beyond 500 doesn't get a negative

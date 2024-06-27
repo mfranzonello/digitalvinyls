@@ -1,0 +1,11 @@
+spotify:
+  sources: [albums, playlists, favorites]
+
+sonos:
+  sources: [playlists, favorites]
+
+soundcloud:
+  sources: [albums, favorites]
+
+onedrive:
+  sources: [albums]

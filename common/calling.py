@@ -87,14 +87,17 @@ class Printer:
         self.over = 0
     
     # Function to demonstrate a progress bar
-    def show_progress(self, current, total, message='completed', tabs=1):
+    def show_progress(self, current=None, total=None, message='completed', tabs=1):
         # Print the progress bar without a newline
-        if total:
-            pct = current/total
-            pct_i = round(pct * 100)
-            pct_h = round(pct * self.hashes)
+        if current is None:
+            pct = 1
+        elif not total:
+            pct = 0
         else:
-            pct = pct_h = pct_i = 0
+            pct = current/total
+        
+        pct_i = round(pct * 100)
+        pct_h = round(pct * self.hashes)
             
         color = Colors.scale_color(pct, Colors.RED_RGB, Colors.GREEN_RGB, Colors.YELLOW_RGB)
 

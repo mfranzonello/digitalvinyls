@@ -1,0 +1,15 @@
+playlists:
+  max_artists_on_album: 4
+  max_tracks_album_playlist: 30
+  types: ['single', 'ep', 'studio', 'soundtrack', 'score', 'compilation', 'playlist']
+
+remove_words:
+  albums:
+    start: ['Remastered', 'Spotify Exclusive', '.*Anniversary Edition', 'Special.*Edition']
+    end: ['Deluxe', 'Deluxe Edition', 'Deluxe Version', 'Remaster', 'Remastered', 'Standard Edition']
+  soundtracks:
+    start: ['.*Motion Picture', 'Music From']
+    end: ['Soundtrack']
+  tracks:
+    start: []
+    end: []
