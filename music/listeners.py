@@ -98,7 +98,7 @@ class Ranker(Texter, Picker):
             print(albums_df.query('category == @category')[['ranking', 'artist_names', 'album_name']])
             print('Press any key to continue...')
             
-            key, loop = Stroker.get_keystroke()
+            _, _ = Stroker.get_keystroke()
             
     def rank_albums(self, neon, user_id):
         loop = True

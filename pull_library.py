@@ -86,7 +86,7 @@ def update_barcodes(neon):
 def main():
     neon = set_up_database()
     
-    DSPs = [Driver] #Spotter, Sounder]
+    DSPs = [Spotter, Sounder, Driver]
      
     update_tracks(neon, DSPs)
     update_artists(neon, DSPs)

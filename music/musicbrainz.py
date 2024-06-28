@@ -1,6 +1,5 @@
 ''' Streaming music sources and libraries '''
 
-from sqlite3 import Row
 import requests
 
 from common.structure import MUSICBRAINZ_URL

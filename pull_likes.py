@@ -38,7 +38,7 @@ def update_pulls(neon, albums_df, artists_df, ownerships_df, service_id, source_
         neon.update_ownerships(ownerships_df, source_id, user.user_id)
 
 def main():
-    DSPs = [Driver] #, Spotter, Driver, Sounder]
+    DSPs = [Spotter, Driver, Sounder]
     neon = set_up_database()
     user_ids = neon.get_user_ids()
     

@@ -5,29 +5,34 @@ from datetime import datetime
 
 import requests
 from requests.auth import HTTPBasicAuth
-from soco.data_structures import DidlItem, to_didl_string
+#from soco.data_structures import DidlItem, to_didl_string
 from soco.discovery import by_name as discover_by_name
 from soco.music_services import MusicService
-from pandas import DataFrame
 
 from common.calling import Caller
-from common.structure import (SONOS_LOGIN_URL, SONOS_CONTROL_URL, SONOS_TOKENS_FOLDER, SONOS_REDIRECT_URI,
-                              SONOS_HOST, SONOS_PORT)
+from common.structure import SONOS_LOGIN_URL, SONOS_CONTROL_URL, SONOS_TOKENS_FOLDER, SONOS_REDIRECT_URI
+                             #SONOS_HOST, SONOS_PORT)
 from common.secret import get_secret, get_token, save_token
-from common.entry import Stroker
 
 class Sonoser(Caller):
     login_url = SONOS_LOGIN_URL
     control_url = SONOS_CONTROL_URL
+    
+    callouts = {'Spotify': 'spotify:spotify%3atrack%3a',
+                'SoundCloud': 'http:track-%3esoundcloud%3atracks%3a',
+                'OneDrive': 'http:',
+                'YouTube Music': 'hls-static',
+                }
+
     def __init__(self):
         super().__init__()
         self.access_token = None
         
         self.household_id = None
         self.owner_id = None
-        self.groups = []
+        self.groups = {}
         self.controller_id = None
-        self.devices = []
+        self.players = {}
         self.controller_name = None
         #self.session_id = None
         
@@ -135,22 +140,41 @@ class Sonoser(Caller):
         coordinator_id = self.groups[self.controller_id]['coordinator_id']
         self.controller_name = self.players[coordinator_id]['name']
         
+    def set_household_volume(self, volumes):
+        for player_id in self.players:
+            discover_by_name(self.players[player_id]['name']).volume = volumes.get[player_id] # might need exception when player is new
+
+    def get_household_volume(self):
+        volumes = {player_id: discover_by_name(self.players[player_id]['name']).volume \
+                   for player_id in self.players}
+        
+        return volumes
+                
     def get_sonos_uris(self, service_name, track_uris):
         '''
         soundcloud -> 'x-sonos-http:track-%3esoundcloud%3atracks%3a{track_uri}.mp3?sid={160}&flags={8232}&sn={2}'
         onedrive ->  'x-sonos-http:{track_uri}.mp3?sid={248}&flags={8232}&sn={8}'
         spotify -> 'x-sonos-spotify:spotify%3atrack%3a{track_url}?sid={12}&flags={8232}&sn={1}'
+        youtube -> 'x-sonosapi-hls-static:{ALkSOiEQuZL4AVQ8himx4Pm5kv9UTIBKifYsu6F9kymBFtZy}?sid={284}&flags={8}&sn={9}
         '''
-        if service_name in ['Spotify', 'SoundCloud', 'Drive']:
-            callout = {'Spotify': 'spotify:spotify%3atrack%3a',
-                       'SoundCloud': 'http:track-%3esoundcloud%3atracks%3a',
-                       'OneDrive': 'http:',
-                       }[service_name]
-            extension = {'SoundCloud': '.mp3',
-                         'OneDrive': '.mp3'}.get(service_name, '')
+        if service_name in self.callouts:
+            match service_name:
+                case 'YouTube':
+                    x_sonos = 'sonosapi'
+                case _:
+                    x_sonos = 'sonos'
+                    
+            match service_name:
+                case 'SoundCloud' | 'OneDrive':
+                    extension = '.mp3'
+                case _:
+                    extension = ''
+                    
+            callout = self.callouts[service_name]
+            
             sid = MusicService.get_data_for_name(service_name)['ServiceID']
         
-            sonos_uris = [f'x-sonos-{callout}{track_uri}{extension}?sid={sid}' for track_uri in track_uris]
+            sonos_uris = [f'x-{x_sonos}-{callout}{track_uri}{extension}?sid={sid}' for track_uri in track_uris]
             
         else:
             print(f'{service_name} is not yet supported.')
