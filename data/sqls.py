@@ -5,6 +5,8 @@ class SQLer:
                'columns': [['service_id', 'serial'],
                            ['service_name', 'varchar'],
                            ['various_artist_uri', 'varchar'],
+                           ['explicits', 'boolean'],
+                           ['audio_analysis', 'boolean']
                            ],
                'pk': ['service_id'],
                'unique': ['service_name', 'service_source'],
@@ -244,35 +246,37 @@ class SQLer:
               },
              {'name': 'true_album_artists',
               'sql': (f"WITH all_artists AS "
-                      f"(SELECT albums.source_id, albums.album_uri, tracks.artist_uris ->> 0 AS primary_artist_uri "
+                      f"(SELECT source_id, album_uri, primary_artist_uri, ord, "
+                      f"jsonb_array_length(track_uris) AS num_tracks "
                       f"FROM albums JOIN sources USING (source_id) "
-                      f"JOIN tracks ON tracks.service_id = sources.service_id AND albums.track_uris ? tracks.track_uri), "
-               
-                      f"counted_artists AS (select source_id, album_uri, primary_artist_uri, count(primary_artist_uri) AS freq "
-                      f"FROM all_artists GROUP BY source_id, album_uri, primary_artist_uri), "
-
+                      f"JOIN tracks ON tracks.service_id = sources.service_id AND albums.track_uris ? tracks.track_uri, "
+                      f"jsonb_array_elements_text(tracks.artist_uris) WITH ORDINALITY arr(primary_artist_uri, ord)), "
+                      
+                      f"counted_artists AS (SELECT source_id, album_uri, primary_artist_uri, COUNT(primary_artist_uri) AS freq "
+                      f"FROM all_artists WHERE ord <= 2 GROUP BY source_id, album_uri, primary_artist_uri), " # could drop the ord <= 2 requirement
+                      f"discounted_artists AS (SELECT source_id, album_uri, primary_artist_uri, freq/jsonb_array_length(track_uris)::numeric AS pct "
+                      f"FROM counted_artists JOIN albums USING (source_id, album_uri)), "
+                      
                       f"primary_artists AS (select source_id, album_uri, "
-                      f"jsonb_agg(primary_artist_uri order by freq DESC) AS primary_artist_uris "
-                      f"FROM counted_artists GROUP BY source_id, album_uri) "
-               
-                      f"SELECT primary_artists.source_id, primary_artists.album_uri, "
-                      f"primary_artists.primary_artist_uris ->> 0 AS artist_uri "
+                      f"jsonb_agg(primary_artist_uri order by pct DESC) AS primary_artist_uris "
+                      f"FROM discounted_artists WHERE pct > 0.5 " 
+                      f"GROUP BY source_id, album_uri) "
+                      
+                      f"SELECT source_id, album_uri, primary_artist_uris "
                       f"FROM primary_artists JOIN albums USING (source_id, album_uri) "
                       f"JOIN sources USING (source_id) JOIN services USING (service_id) "
-                      f"WHERE NOT primary_artists.primary_artist_uris ? (albums.artist_uris ->> 0) "
-                      f"AND NOT (albums.artist_uris ->> 0) = services.various_artist_uri "
+                      f"WHERE NOT artist_uris @> primary_artist_uris "
                       ),
               },
              {'name': 'album_artists',
-              'sql': (f"SELECT albums_expanded.source_id, albums_expanded.album_uri, "
-                      f"string_agg(artists.artist_name, '; ' ORDER BY albums_expanded.ord) AS artist_names "
-                      f"FROM (SELECT albums.source_id, albums.album_uri, arr.artist_uri, arr.ord "
-                      f"FROM albums LEFT JOIN true_album_artists USING (source_id, album_uri), "
-                      f"jsonb_array_elements_text(CASE WHEN artist_uri IS NULL THEN artist_uris "
-                      f"ELSE jsonb_build_array(artist_uri) END) "
+              'sql': (f"SELECT source_id, album_uri, "
+                      f"string_agg(artist_name, '; ' ORDER BY ord) AS artist_names "
+                      f"FROM (SELECT source_id, album_uri, artist_uri, ord "
+                      f"FROM albums LEFT JOIN true_album_artists_2 USING (source_id, album_uri), "
+                      f"jsonb_array_elements_text(COALESCE(primary_artist_uris, artist_uris)) "
                       f"WITH ORDINALITY arr(artist_uri, ord)) AS albums_expanded "
                       f"JOIN sources USING (source_id) JOIN artists USING (service_id, artist_uri) "
-                      f"GROUP BY albums_expanded.source_id, albums_expanded.album_uri "
+                      f"GROUP BY source_id, album_uri "
                       ),
               },
              {'name': 'release_battles',
@@ -350,10 +354,11 @@ class SQLer:
             ]
     
     updates = [{'name': 'update_tracks',
-                'sql': (f"SELECT sources.service_id, jsonb_array_elements_text(albums.track_uris) AS track_uri FROM albums "
+                'sql': (f"SELECT service_id, jsonb_array_elements_text(track_uris) AS track_uri FROM albums "
                         f"JOIN sources USING (source_id) "
                         f"EXCEPT SELECT service_id, track_uri FROM tracks WHERE "
-                        f"(track_name IS NOT NULL AND explicit IS NOT NULL) "
+                        f"track_name IS NOT NULL AND "
+                        f"(explicit IS NOT NULL OR service_id NOT IN (SELECT service_id FROM services WHERE explicits)) "
                         ),
                 },
                {'name': 'update_recordings',
@@ -384,22 +389,27 @@ class SQLer:
                         f"AND albums.album_uri = album_categories.album_uri "
                         f"LEFT JOIN barcodes USING (upc) "
                         f"WHERE album_categories.category = 'soundtrack' AND instrumentalness IS NULL "
+                        f"AND service_id IN (SELECT service_id FROM services WHERE audio_analysis) "
+                        ),
+                },
+               {'name': 'update_upcs',
+                'sql': (f"SELECT source_id, album_uri, artist_names, album_name, release_date "
+                        f"FROM albums JOIN album_artists USING (source_id, album_uri) "
+                        f"WHERE upc IS NULL AND album_type NOT IN ('single', 'playlist') "
                         ),
                 },
                {'name': 'update_barcodes',
                 'sql': (f"WITH regex_soundtrack AS (SELECT '%(' || string_agg(phrase, '|') || ')%' "
                         f"AS soundtrack_words FROM keywords WHERE keyword = 'soundtrack'), "
-               
-                        f"upcs AS (SELECT albums.upc FROM albums, regex_soundtrack "
-                        f"WHERE albums.album_type not in ('single', 'ep', 'playlist') AND albums.upc IS NOT NULL "
-                        f"AND lower(albums.album_name) NOT SIMILAR TO soundtrack_words "
+                        
+                        f"upcs AS (SELECT upc FROM albums, regex_soundtrack "
+                        f"WHERE album_type not in ('single', 'ep', 'playlist') AND upc IS NOT NULL "
+                        f"AND lower(album_name) NOT SIMILAR TO soundtrack_words "
                         f"EXCEPT SELECT upc FROM barcodes UNION SELECT upc FROM barcodes WHERE release_type IS NULL) "
-               
-                        f"SELECT upcs.upc, artists.artist_name, albums.album_name, albums.release_date FROM upcs "
+                        
+                        f"SELECT upc, artist_names, album_name, release_date FROM upcs "
                         f"JOIN albums USING (upc) JOIN sources USING (source_id) "
-                        f"LEFT JOIN true_album_artists USING (source_id, album_uri) "
-                        f"JOIN artists ON sources.service_id = artists.service_id "
-                        f"AND COALESCE(true_album_artists.artist_uri, albums.artist_uris ->> 0) = artists.artist_uri "
+                        f"JOIN album_artists USING (source_id, album_uri) "
                         ),
                 },
               ]

@@ -109,21 +109,27 @@ class Neon:
 
     ''' table and view setup '''
     def create_tables(self):
+        print('\tcreating tables')
         self.execute(SQLer.create_tables())
             
     def drop_tables(self):
+        print('\tdropping tables [WARNING]')
         self.execute(SQLer.drop_tables())
 
     def create_views(self):
+        print('\tcreating views')
         self.execute(SQLer.create_views() + SQLer.summarize_views())
         
     def materialize_views(self):
+        print('\tmaterializing views')
         self.execute(SQLer.materialize_views())
     
     def refresh_views(self):
+        print('\trefreshing views')
         self.execute(SQLer.refresh_views())
         
     def drop_views(self):
+        print('\tdropping views [WARNING]')
         self.execute(SQLer.drop_views())
 
         
@@ -258,6 +264,10 @@ class Neon:
     def update_works(self, tracks_df):
         columns = ['iswc', 'release_year']
         self.update_service_table(tracks_df, 'works', columns, ['iswc'])
+
+    def update_upcs(self, albums_df):
+        columns = ['source_id', 'album_uri', 'upc']
+        self.update_service_table(albums_df, 'albums', columns, ['source_id', 'album_uri'])
         
     def update_barcodes(self, albums_df):
         columns = ['upc', 'release_type']
@@ -487,11 +497,15 @@ class Neon:
         return tracks_df
 
     def get_compilations_to_update(self):
-        tracks_df = self.get_table_to_update('compilations', limit=300)
+        tracks_df = self.get_table_to_update('compilations')
         return tracks_df
-
+    
+    def get_upcs_to_update(self):
+        albums_df = self.get_table_to_update('upcs')
+        return albums_df
+        
     def get_barcodes_to_update(self):
-        tracks_df = self.get_table_to_update('barcodes', limit=300)
+        tracks_df = self.get_table_to_update('barcodes')
         return tracks_df
     
     def get_billboard_to_update(self):

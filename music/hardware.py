@@ -15,7 +15,6 @@ from common.structure import (SONOS_LOGIN_URL, SONOS_CONTROL_URL, SONOS_TOKENS_F
                               SONOS_HOST, SONOS_PORT)
 from common.secret import get_secret, get_token, save_token
 from common.entry import Stroker
-from music.listeners import Picker
 
 class Sonoser(Caller):
     login_url = SONOS_LOGIN_URL
@@ -135,187 +134,100 @@ class Sonoser(Caller):
     def set_controller_name(self):
         coordinator_id = self.groups[self.controller_id]['coordinator_id']
         self.controller_name = self.players[coordinator_id]['name']
-
-    def get_playlists(self):
-        url = f'{self.control_url}/households/{self.household_id}/playlists'
-        data = {}
-        response = requests.get(url, params=data, headers=self.get_headers())
-        if response.ok:
-            print(response.json())
+        
+    def get_sonos_uris(self, service_name, track_uris):
+        '''
+        soundcloud -> 'x-sonos-http:track-%3esoundcloud%3atracks%3a{track_uri}.mp3?sid={160}&flags={8232}&sn={2}'
+        onedrive ->  'x-sonos-http:{track_uri}.mp3?sid={248}&flags={8232}&sn={8}'
+        spotify -> 'x-sonos-spotify:spotify%3atrack%3a{track_url}?sid={12}&flags={8232}&sn={1}'
+        '''
+        if service_name in ['Spotify', 'SoundCloud', 'Drive']:
+            callout = {'Spotify': 'spotify:spotify%3atrack%3a',
+                       'SoundCloud': 'http:track-%3esoundcloud%3atracks%3a',
+                       'OneDrive': 'http:',
+                       }[service_name]
+            extension = {'SoundCloud': '.mp3',
+                         'OneDrive': '.mp3'}.get(service_name, '')
+            sid = MusicService.get_data_for_name(service_name)['ServiceID']
+        
+            sonos_uris = [f'x-sonos-{callout}{track_uri}{extension}?sid={sid}' for track_uri in track_uris]
             
-    def get_favorites(self):
-        url = f'{self.control_url}/households/{self.household_id}/favorites'
-        data = {}
-        response = requests.get(url, params=data, headers=self.get_headers())
-        if response.ok:
-            print(response.json())
-            items = response.json()['items']
-            info_albums = {}
-            info_artists = {}
-            info_ownerships = {}
-            
-            #info_albums['artist_uris'] = [None for item in items]
-            info_albums['album_uri'] = [item['id'] for item in items]
-            info_albums['album_name'] = [item['name'] for item in items]
-            info_albums['image_src'] = [item['images'][0]['url'] for item in items]
-            info_albums['album_type'] = [item['resource']['type'].lower() for item in items]
-            #info_albums['track_uris'] = [None for item in items]
-            #info_albums['album_duration'] = [None for item in items]
-            #info_albums['upc'] = [None for item in items]
-            #info_albums['release_date'] = [None for item in items]
-
-            #info_artists['artist_uri'] = [None for item in items]
-            #info_artists['artist_name'] = [None for item in items]
-
-            info_ownerships['album_uri'] = info_albums['album_uri']
-            info_ownerships['like_date'] = datetime.today().date()
+        else:
+            print(f'{service_name} is not yet supported.')
+            sonos_uris = None
+        
+        return sonos_uris
     
-        albums_df = DataFrame(info_albums)
-        artists_df = DataFrame(info_artists).drop_duplicates()
-        ownerships_df = DataFrame(info_ownerships)
+    def play_release(self, service_name, track_uris):
+        uris = self.get_sonos_uris(service_name, track_uris)
+        if len(uris):
+            device = discover_by_name(self.controller_name)
+            device.clear_queue()
         
-        return albums_df, artists_df, ownerships_df
+            for uri in uris:
+                device.add_uri_to_queue(uri)
+        
+            device.play_from_queue(0)
+
+    # # def get_playlists(self):
+    # #     url = f'{self.control_url}/households/{self.household_id}/playlists'
+    # #     data = {}S
+    # #     response = requests.get(url, params=data, headers=self.get_headers())
+    # #     if response.ok:
+    # #         print(response.json())
+            
+    # # def get_favorites(self):
+    # #     url = f'{self.control_url}/households/{self.household_id}/favorites'
+    # #     data = {}
+    # #     response = requests.get(url, params=data, headers=self.get_headers())
+    # #     if response.ok:
+    # #         print(response.json())
+    # #         items = response.json()['items']
+    # #         info_albums = {}
+    # #         info_artists = {}
+    # #         info_ownerships = {}
+            
+    # #         #info_albums['artist_uris'] = [None for item in items]
+    # #         info_albums['album_uri'] = [item['id'] for item in items]
+    # #         info_albums['album_name'] = [item['name'] for item in items]
+    # #         info_albums['image_src'] = [item['images'][0]['url'] for item in items]
+    # #         info_albums['album_type'] = [item['resource']['type'].lower() for item in items]
+    # #         #info_albums['track_uris'] = [None for item in items]
+    # #         #info_albums['album_duration'] = [None for item in items]
+    # #         #info_albums['upc'] = [None for item in items]
+    # #         #info_albums['release_date'] = [None for item in items]
+
+    # #         #info_artists['artist_uri'] = [None for item in items]
+    # #         #info_artists['artist_name'] = [None for item in items]
+
+    # #         info_ownerships['album_uri'] = info_albums['album_uri']
+    # #         info_ownerships['like_date'] = datetime.today().date()
     
-    def play_sonos_list(self, list_name):
-        list_source = None
-        if list_name in self.favorites.values():
-            list_source = 'favorites'
-            source = self.favorites
-            
-        elif list_name in self.playlists.values():
-            list_source = 'playlists'
-            source = self.playlists
-            
-        if list_source:
-            list_id = next(key for key, value in source.items() if value == list_name)
-            url = f'{self.control_url}/groups/{self.controller_id}/{list_source}'
-            data = {f'{list_source[:-1]}Id': list_id,
-                    'action': 'REPLACE',
-                    'playOnCompletion': True}
-
-            response = requests.post(url, data=data, headers=self.get_headers())
-            if response.ok:
-                pass
+    # #     albums_df = DataFrame(info_albums)
+    # #     artists_df = DataFrame(info_artists).drop_duplicates()
+    # #     ownerships_df = DataFrame(info_ownerships)
         
-    # # def play_spotify_album(self, track_list):
-    # #     requests.get(url=f'{SONOS_HOST}:{SONOS_PORT}/clearqueue')
-    # #     for i, track_uri in enumerate(track_list):
-    # #         n = 'now' if i == 0 else 'next'
-    # #         requests.get(url=f'{SONOS_HOST}:{SONOS_PORT}/{self.controller_name}/spotify/{n}/spotify:track:{track_uri}')
-            
-    def play_spotify_album(self, track_list, titles):
-        ms = MusicService('Spotify')
-        service_type = ''
-        service_token = f'SA_RINCON${service_type}_X_#Svc${service_type}-0-Token'
-        spotifyDef = {'metastart': {'album':   '0004206cspotify%3aalbum%3a',
-                                    'track':    '00032020spotify%3atrack%3a',
-                                    #'station': '000c206cspotify:artistRadio%3a',
-                                    #'playlist': '0004206cspotify%3aplaylist%3a'
-                                    },
-                      'parent':    {'album':   '00020000album:',
-                                    'track':    '00020000track:',
-                                    #'station': '00052064spotify%3aartist%3a',
-                                    #'playlist':'00020000playlist:',
-                                    },
-                      'object':    {'album':   'container.album.musicAlbum',
-                                    'track':    'item.audioItem.musicTrack',
-                                    #'station': 'item.audioItem.audioBroadcast.#artistRadio',
-                                    #'playlist':'container.playlistContainer',
-                                    },
-             
-                      }        
-        #tag_0 = 'x-rincon-cpcontainer:0004206c'
-        # # tags = {'spotify': ['x-sonos-spotify:spotify%3atrack%3a', '?sid=12&flags=8232&sn=1'],
-        # #         'soundcloud': ['x-sonos-http:track-%3esoundcloud%3atracks%3', '?sid=160&flags=8232&sn=2'],
-        # #         }               
-        tags = ['x-sonos-spotify:spotify%3atrack%3a', '?sid=12&flags=8232&sn=1']
-        
-        device = discover_by_name(self.controller_name)
-        device.clear_queue()
-        
-        for track_uri, title in zip(track_list, titles):
-            uri = f'{tags[0]}{track_uri}{tags[1]}'
-            title = 'HEY'
-            item_id = f'spotify:track:{track_uri}'
-            parent_id = spotifyDef['parent']['album'] + 'HO'
-            didl = DidlItem(title=title, parent_id=parent_id, item_id=item_id, desc=ms.desc)
-            # # if i == 0:
-            # #     device.play_uri(uri, meta=to_didl_string(didl))
-            # # else:
-            device.add_uri_to_queue(uri, meta=to_didl_string(didl))#, position=i+1, as_next=True)
-        
-        device.play_from_queue(0)
-
-class Turntable(Picker):
-    def __init__(self):
-        super().__init__()
-        self.users = []
-        self.record_stack = []
-        self.needle = -1
-        
-    def play_music(self, neon, sonoser):
-        user = self.select_user(message='listen to')   
-
-        user_name = user.first_name + ' ' + user.last_name
-        user_id = user.user_id
-        print(f'Welcome {user_name}!')
-        press_right = '[→] to play the next album'
-        
-        loop = True
-        while loop:
-            if self.needle >= 0:
-                press_left = '[←] to go back to the previous album'
-                press_up = '[↑] to replay this album'
-                press_down = f'[↓] to {"pause" if sonoser.get_play_status() else "continue"} playing'
-                allowed_keys = ['LEFT', 'RIGHT', 'UP', 'DOWN']
-            else:
-                press_left = press_up = press_down = None
-                allowed_keys = ['RIGHT']
-                
-            press_choices = ', '.join(p for p in [press_left, press_up, press_down, press_right] if p)
-            print(f'Press {press_choices} or [Q] to quit.')
-            key, loop = Stroker.get_keystroke(allowed_keys=allowed_keys, quit_key='Q')
-            if loop:
-                match key:
-                    case 'LEFT':
-                        skip = -1
-                    case 'RIGHT':
-                        skip = 1
-                    case 'UP':
-                        skip = 0
-                    
-                if key in ['LEFT', 'RIGHT', 'UP']:
-                    album_s = self.select_album(neon, user_id, skip)
-                    self.play_album(neon, sonoser, user_id, album_s)
-
-                elif key == 'DOWN':
-                    sonoser.change_play_status()
-                
-    def select_album(self, neon, user_id, skip=0):
-        # get the next album to play
-        self.needle += skip
-        if self.needle >= len(self.record_stack):
-            # add new album to the stack
-            self.record_stack.append(neon.get_random_album(user_id))
-        album_s = self.record_stack[self.needle]
-        return album_s
-        
-    def play_album(self, neon, sonoser, user_id, album_s):
-        artist_names, album_name = album_s[['artist_names', 'album_name']]
-        service_name, source_name, service_id, source_id = album_s[['service_name', 'source_name',
-                                                                    'service_id', 'source_id']]
+    # #     return albums_df, artists_df, ownerships_df
     
-        print(f'Playing {artist_names} - {album_name} from {service_name}')
-        match service_id:
-            case 1: # Spotify
-                match source_id:
-                    case 1:
-                        sonoser.play_spotify_album(album_s['track_list'], titles=['']*len(album_s['track_list'])) ## need titles
-                    case _:
-                        print(f'{source_name} is not supported yet')
-            case 2: # Soundcloud
-                print('This service type is not supported yet')
-            case 3: # Sonos
-                print('This service type is not supported yet')
-            case _:
-                print('This service type is not supported yet')
+    # # def play_sonos_list(self, list_name):
+    # #     list_source = None
+    # #     if list_name in self.favorites.values():
+    # #         list_source = 'favorites'
+    # #         source = self.favorites
+            
+    # #     elif list_name in self.playlists.values():
+    # #         list_source = 'playlists'
+    # #         source = self.playlists
+            
+    # #     if list_source:
+    # #         list_id = next(key for key, value in source.items() if value == list_name)
+    # #         url = f'{self.control_url}/groups/{self.controller_id}/{list_source}'
+    # #         data = {f'{list_source[:-1]}Id': list_id,
+    # #                 'action': 'REPLACE',
+    # #                 'playOnCompletion': True}
+
+    # #         response = requests.post(url, data=data, headers=self.get_headers())
+    # #         if response.ok:
+    # #             pass
+        
+

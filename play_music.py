@@ -1,7 +1,8 @@
 ''' Play music '''
 
 from setup import set_up_database, set_up_users
-from music.hardware import Sonoser, Turntable
+from music.hardware import Sonoser
+from music.listeners import Turntable
 
 def set_up_speakers():
     sonoser = Sonoser()

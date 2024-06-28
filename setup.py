@@ -33,7 +33,7 @@ def set_up_users(neon):
     return users
 
 def is_updatable(df):
-    return (df is not None) and (not df.empty)
+    return (df is not None) and (not df.dropna(how='all').empty)
 
 def main():
     set_up_database(drop_tables=False, create_tables=True, drop_views=True, create_views=True, materialize=True)

@@ -1,4 +1,4 @@
-''' Music fans '''
+﻿''' Music fans '''
 
 from pandas import isna
 
@@ -37,12 +37,21 @@ class Picker:
     def select_user(self, message=''):
         user_print = '\n'.join(f'[{i+1}] - {user.first_name} {user.last_name}' for i, user in enumerate(self.users))
         user_range = [str(i+1) for i in range(len(self.users))] # need to limit to 9 at a time
-        print(f'Whose music do you want to {message}?')
-        print(user_print)
+        
+        if len(self.users) == 0:
+            print('No users set up yet.')
+            user = None
+
+        if len(self.users) == 1:
+            user = self.users[0]
             
-        key, _ = Stroker.get_keystroke(allowed_keys=user_range, quit_key='Q')
+        else:
+            print(f'Whose music do you want to {message}?')
+            print(user_print)
             
-        user = self.users[user_range.index(key)]
+            key, _ = Stroker.get_keystroke(allowed_keys=user_range, quit_key='Q')
+            
+            user = self.users[user_range.index(key)]
             
         return user
         
@@ -159,3 +168,63 @@ class Ranker(Texter, Picker):
             neon.update_album_rating(user_id, source_id, album_uri, rating)
 
         return loop
+
+
+class Turntable(Picker):
+    def __init__(self):
+        super().__init__()
+        self.users = []
+        self.record_stack = []
+        self.needle = -1
+        
+    def play_music(self, neon, sonoser):
+        
+        user = self.select_user(message='listen to')   
+
+        user_name = user.first_name + ' ' + user.last_name
+        user_id = user.user_id
+        print(f'Welcome {user_name}!')
+        press_right = '[→] to play the next album'
+        
+        loop = True
+        while loop:
+            if self.needle >= 0:
+                press_left = '[←] to go back to the previous album'
+                press_up = '[↑] to replay this album'
+                press_down = f'[↓] to {"pause" if sonoser.get_play_status() else "continue"} playing'
+                allowed_keys = ['LEFT', 'RIGHT', 'UP', 'DOWN']
+            else:
+                press_left = press_up = press_down = None
+                allowed_keys = ['RIGHT']
+                
+            press_choices = ', '.join(p for p in [press_left, press_up, press_down, press_right] if p)
+            print(f'Press {press_choices} or [Q] to quit.')
+            key, loop = Stroker.get_keystroke(allowed_keys=allowed_keys, quit_key='Q')
+            if loop:
+                match key:
+                    case 'LEFT':
+                        skip = -1
+                    case 'RIGHT':
+                        skip = 1
+                    case 'UP':
+                        skip = 0
+                    
+                if key in ['LEFT', 'RIGHT', 'UP']:
+                    album_s = self.select_album(neon, user_id, skip)
+                    self.play_album(sonoser, album_s)
+
+                elif key == 'DOWN':
+                    sonoser.change_play_status()
+                
+    def select_album(self, neon, user_id, skip=0):
+        # get the next album to play
+        self.needle += skip
+        if self.needle >= len(self.record_stack):
+            # add new album to the stack
+            self.record_stack.append(neon.get_random_album(user_id))
+        album_s = self.record_stack[self.needle]
+        return album_s
+        
+    def play_album(self, sonoser, album_s):
+        print(f"Playing {album_s['artist_names']} - {album_s['album_name']} from {album_s['service_name']}")
+        sonoser.play_release(album_s['service_name'], album_s['track_list'])

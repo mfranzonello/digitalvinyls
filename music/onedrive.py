@@ -14,10 +14,7 @@ from music.dsp import DSP
 
 class Driver(DSP):
     name = 'OneDrive'
-    '''
-    example uris look like 'x-sonos-http:E2650D85B65AED6B!183717.mp3?sid=248&flags=8232&sn=8'
-    so probably of type 'x-sonos-http:{drive_id or user_id}!{file_id}.mp3?sid=248&flags=8232&sn=8'
-    '''
+
     login_url = AZURE_LOGIN_URL
     graph_url = AZURE_GRAPH_URL
     skiptoken = '$skiptoken'
@@ -117,8 +114,6 @@ class Driver(DSP):
         data = {'name': folder_name,
                 'folder': {},
                 '@microsoft.graph.conflictBehavior': 'fail'}
-        ##url = f'{self.graph_url}/drives/{self.drive_id}/items/{parent_id}/children'
-        ##url = f'{self.graph_url}/users/{self.user_id}/drive/items/{parent_id}/children'
         response = requests.post(f'{self.graph_url}/drives/{self.drive_id}/items/{parent_id}/children',
                                  json=data, headers=self.get_auth_headers_json())
         ## self.sleep()
@@ -241,7 +236,7 @@ class Driver(DSP):
                     info__albums['image_src'] = [image_src]
                     info__albums['artist_uris'] = [[artist_uri]]
                     info__albums['track_uris'] = [track_uris]
-                    #info__albums['upc']
+                    info__albums['upc'] = [False]
                     info__albums['album_duration'] = [album_duration]
                 
                     info__artists = {}
@@ -282,7 +277,7 @@ class Driver(DSP):
             info__tracks['track_uri'] = [track_uri]
             info__tracks['track_name'] = [track_name]
             info__tracks['artist_uris'] = [artist_uris]
-            #info__tracks['isrc']
+            info__tracks['isrc'] = [False]
             info__tracks['track_duration'] = [track_duration]
             #info__tracks['explicit']
 

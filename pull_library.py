@@ -65,6 +65,15 @@ def update_works(neon):
         service.disconnect()
 
 def update_barcodes(neon):
+    albums_df = neon.get_upcs_to_update()
+    if is_updatable(albums_df):
+        service = MusicBrainer()
+        service.connect()
+        albums_df = service.find_barcodes_data(albums_df)
+        if is_updatable(albums_df):
+            neon.update_upcs(albums_df, )
+        service.disconnect()
+        
     albums_df = neon.get_barcodes_to_update()
     if is_updatable(albums_df):
         service = MusicBrainer()        

@@ -1,5 +1,6 @@
 ''' Streaming music sources and libraries '''
 
+from sqlite3 import Row
 import requests
 
 from common.structure import MUSICBRAINZ_URL
@@ -123,47 +124,96 @@ class MusicBrainer(Service):
         first_release_year = min(release_years) if release_years else None
     
         return first_release_year 
-    
-    def get_barcodes_data(self, albums_df):
-        print('getting barcodes data')
-        albums_df = self.get_barcodes_info(albums_df['upc'].to_list(),
-                                           albums_df['artist_name'].to_list(),
-                                           albums_df['album_name'].to_list(),
-                                           albums_df['release_date'].to_list())
+
+    def get_mb_release_combos(self, album_s):
+        upc_combos = [{'upc': album_s.get('upc')}]
+        artist_album_combos = [{f'{a}_name': s, 'album_name': album_s['album_name']} for a in ['artist', 'alias'] for s in album_s['artist_names'].split('; ')] # artist/alias name and album title
+        unknown_artist_album_combos = [{'artist_name': '[unknown artist]', 'album_name': album_s['album_name']}] # unknown artist and album title
+        artist_date_combos = [{f'{a}_name': s, f'release_{r}': album_s['release_date']} for r in ['date', 'year'] for a in ['artist', 'alias'] for s in album_s['artist_names'].split('; ')] # artist/alias name and release date/year
+        album_date_combos = [{'album_name': album_s['album_name'], f'release_{r}': album_s['release_date']} for r in ['date', 'year']] # album title and release date/year
+        
+        combos = upc_combos + artist_album_combos + unknown_artist_album_combos + artist_date_combos + album_date_combos
+        return combos
+
+    def find_barcodes_data(self, albums_df):
+        self.announce('finding barcodes data')
+        
+        info_albums = {}
+        total_rows = len(albums_df)
+        for i, album_s in albums_df.iterrows():
+            self.show_progress(i, total_rows, message=f'{album_s["album_name"]}')
+            
+            upc = None
+            for combo in self.get_mb_release_combos(album_s):
+                upc = self.get_upc(**combo)
+                if upc:
+                    break
+
+            info__albums = {}
+            info__albums['source_id'] = [album_s['source_id']]
+            info__albums['album_uri'] = [album_s['album_uri']]
+            info__albums['upc'] = [upc]
+            info_albums = self.combine_infos(info_albums, info__albums)
+        
+        self.show_progress()
+        albums_df = self.get_df_from_info(info_albums)
         
         return albums_df
-    
-    def get_barcodes_info(self, upcs, artist_names=None, album_names=None, release_dates=None):
-        total_rows = len(upcs)
-        info_upc = {}
-        for i, upc in enumerate(upcs):
-            self.show_progress(i, total_rows, message=f'UPC: {upc}')
-            
-            info__upc = {}
-            info__upc['upc'] = [upc]
-            
-            release_type = None           
-            for kwargs in [{'upc': upc}, # barcode
-                           {'artist_name': artist_names[i], 'album_name': album_names[i]}, # artist name and album title
-                           {'alias_name': artist_names[i], 'album_name': album_names[i]}, # artist name and album title
-                           {'artist_name': artist_names[i], 'release_date': release_dates[i]}, # release by artist on date
-                           {'album_name': album_names[i], 'release_date': release_dates[i]}, # release on date with title
-                           ]:
-                release_type = self.get_release_type(**kwargs)
+        
+    def get_barcodes_data(self, albums_df):
+        self.announce('getting barcodes data')
+        
+        total_rows = len(albums_df)
+        info_albums = {}
+        for i, album_s in albums_df.iterrows():
+            self.show_progress(i, total_rows, message=f'UPC: {album_s["upc"]}')
+        
+            release_type = None
+            for combo in self.get_mb_release_combos(album_s):
+                release_type = self.get_release_type(**combo)
                 if release_type:
                     break
 
-            info__upc['release_type'] = [release_type]
+            info__albums = {}
+            info__albums['upc'] = [album_s['upc']]
+            info__albums['release_type'] = [release_type]
+            info_albums = self.combine_infos(info_albums, info__albums)
             
-            info_upc = self.combine_infos(info_upc, info__upc)
-                
         self.show_progress()
-        albums_df = self.get_df_from_info(info_upc)
-        
+        albums_df = self.get_df_from_info(info_albums)
+            
         return albums_df
     
-    def get_release_type(self, upc=None, artist_name=None, alias_name=None, album_name=None, release_date=None):
-        release_type = None
+    def get_release_type(self, upc=None, artist_name=None, alias_name=None, album_name=None, release_date=None, release_year=None):
+        response = self.get_release_info(upc=upc, artist_name=artist_name, alias_name=alias_name, album_name=album_name,
+                                         release_date=release_date, release_year=release_year)
+        release_types = []
+        if response.ok:
+            releases = response.json()['releases']
+            if len(releases):
+                release_groups = releases[0]['release-group']
+                release_types = []
+                if 'secondary-types' in release_groups:
+                    release_types += [rt.lower() for rt in release_groups['secondary-types']]
+                elif 'primary-type' in release_groups:
+                    release_types += [release_groups['primary-type'].lower()]
+                
+        release_type = next((a for a in self.album_types if a in release_types), None)
+        self.add_text(f'release types: {release_types}')
+
+        return release_type
+            
+    def get_upc(self, upc=None, artist_name=None, alias_name=None, album_name=None, release_date=None, release_year=None):
+        response = self.get_release_info(artist_name=artist_name, alias_name=alias_name, album_name=album_name,
+                                         release_date=release_date, release_year=release_year)
+        if response.ok:
+            releases = response.json()['releases']
+            if len(releases):
+                upc = releases[0].get('barcode')        
+        
+        return upc
+
+    def get_release_info(self, upc=None, artist_name=None, alias_name=None, album_name=None, release_date=None, release_year=None):
         query = ''
         
         if upc:
@@ -182,10 +232,12 @@ class MusicBrainer(Service):
                 queries.append(f'artist:"{artist_name}"')
             if album_name:
                 title, _ = self.remove_parentheticals(album_name.replace(" - ", " ").replace("-", ""), RemoveWords.albums)
-                queries.append(f'title:"{title}"')
+                queries.append(f'release:"{title}"')
             if release_date:
                 queries.append(f'date:{release_date.strftime("%Y-%m-%d")}')
-            
+            elif release_year:
+                queries.append(f'date:{release_year.strftime("%Y")}')
+                
             if len(queries) >= 2:
                 # enough information to search
                 query = ' AND '.join(queries)
@@ -196,21 +248,12 @@ class MusicBrainer(Service):
             release_types = []
         
             response = self.call_mb('release', f'{query}')
-            if response.ok:
-                releases = response.json()['releases']
-                if len(releases):
-                    release_groups = releases[0]['release-group']
-                    release_types = []
-                    if 'secondary-types' in release_groups:
-                        release_types += [rt.lower() for rt in release_groups['secondary-types']]
-                    elif 'primary-type' in release_groups:
-                        release_types += [release_groups['primary-type'].lower()]
-                
-            release_type = next((a for a in self.album_types if a in release_types), None)
-            self.add_text(f'release types: {release_types}')
-
-        return release_type
-    
+           
+        else:
+            response = self.no_response()
+            
+        return response
+        
     def get_aliases(self, artist_name):
         aliases = []
         response = self.call_mb('artist', f'alias:"{artist_name}"')
@@ -219,5 +262,3 @@ class MusicBrainer(Service):
             
         return aliases
     
-    def get_upc(self, albums_df):
-        pass

@@ -1,5 +1,8 @@
 spotify:
   sources: [albums, playlists, favorites]
+  explicits: True
+  various_artists_id: 0LyfQWJT6nXafLPZqxe9Of
+  audio_analysis: True
 
 sonos:
   sources: [playlists, favorites]
