@@ -2,7 +2,7 @@
 
 import requests
 
-from common.structure import MUSICBRAINZ_URL
+from common.structure import MUSICBRAINZ_URL, MUSICBRAINZ_RATE_LIMIT, MUSICBRAINZ_QHAR_LIMIT
 from library.wordbank import RemoveWords
 from music.dsp import Service
      
@@ -10,19 +10,13 @@ class MusicBrainer(Service):
     name = 'MusicBrainz'
     
     url = MUSICBRAINZ_URL
-    data = {'fmt': 'json'}
-    api_rate_limit = 1 # calls per second
+    api_rate_limit = MUSICBRAINZ_RATE_LIMIT # calls per second
+    qhar_limit = MUSICBRAINZ_QHAR_LIMIT # query characters
+    data = {'fmt': 'json'}    
 
-    rid_limit = 100
-    
     album_types = ['soundtrack', 'compilation', 'album', 'ep', 'live', 'remix']
     non_album_types = ['single']
-    
-    remove_words = [{'position': 'start',
-                     'words': ['Remastered', 'Spotify Exclusive', '.*Anniversary Edition', 'Special.*Edition']},
-                    {'position': 'end',
-                     'words': ['Deluxe', 'Deluxe Edition', 'Deluxe Version', 'Remaster', 'Remastered', 'Standard Edition']}]
-                    
+                   
     def __init__(self):
         super().__init__()
        
@@ -110,7 +104,7 @@ class MusicBrainer(Service):
         response = self.call_mb('work', f'iswc:{iswc}')
         if response.ok:
             rids = [w['recording']['id'] for w in response.json()['works'][0]['relations'] if w['type'] == 'performance']
-            rid_ors = (' OR ').join(f'"{r}"' for r in rids[0:min(self.rid_limit, len(rids))]) # stay within uri limit
+            rid_ors = (' OR ').join(f'"{r}"' for r in rids[0:min(self.qhar_limit, len(rids))]) # stay within uri limit
             response = self.call_mb('recording', f'rid:({rid_ors})')
             if response.ok:
                 release_years = [int(r.get('first-release-date')[0:4]) for r in response.json()['recordings'] \

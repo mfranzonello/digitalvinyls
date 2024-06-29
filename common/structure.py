@@ -25,7 +25,7 @@ def get_scope(folder):
     return ', '.join(scope)
 
 _auths_folder = 'auths'
-_tokens_folder = 'tokens'
+_tokens_folder = f'{_auths_folder}/tokens'
 _config_folder = 'config'
 _csvs_folder = 'csvs'
 
@@ -45,15 +45,36 @@ SONOS_LOGIN_URL = _api['sonos']['urls']['login']
 SONOS_CONTROL_URL = _api['sonos']['urls']['control']
 
 SOUNDCLOUD_PLAY_URL = _api['soundcloud']['urls']['play']
-SOUNDCLOUD_WIDGET_URL = _api['soundcloud']['urls']['widget']
+SOUNDCLOUD_SEARCH_URL = _api['soundcloud']['urls']['search']
 
 AZURE_LOGIN_URL = _api['azure']['urls']['login']
 AZURE_GRAPH_URL = _api['azure']['urls']['graph']
 
+GCP_AUTH_URL = _api['gcp']['urls']['auth']
+GCP_APIS_URL = _api['gcp']['urls']['apis']
+GCP_TOKEN_URI = _api['gcp']['urls']['token']
+
+
+# LIMITS
+SPOTIFY_RATE_LIMIT = _api['spotify']['limits']['rate']
+SPOTIFY_QUERY_LIMIT = _api['spotify']['limits']['query']
+
+SOUNDCLOUD_RATE_LIMIT = _api['soundcloud']['limits']['rate']
+SOUNDCLOUD_QUERY_LIMIT = _api['soundcloud']['limits']['query']
+
+AZURE_RATE_LIMIT = _api['azure']['limits']['rate']
+
+MUSICBRAINZ_RATE_LIMIT = _api['musicbrainz']['limits']['rate']
+MUSICBRAINZ_QHAR_LIMIT = _api['musicbrainz']['limits']['qhar']
+
+BILLBOARD_RATE_LIMIT = _api['billboard']['limits']['rate']
+
+
 # VALUES
-SPOTIFY_TOKENS_FOLDER = f'{_auths_folder}/spotify/{_tokens_folder}'
-SONOS_TOKENS_FOLDER = f'{_auths_folder}/sonos/{_tokens_folder}'
-AZURE_TOKENS_FOLDER = f'{_auths_folder}/azure/{_tokens_folder}'
+SPOTIFY_TOKENS_FOLDER = f'{_tokens_folder}/spotify'
+SONOS_TOKENS_FOLDER = f'{_tokens_folder}/sonos'
+AZURE_TOKENS_FOLDER = f'{_tokens_folder}/azure'
+SOUNDCLOUD_TOKENS_FOLDER = f'{_tokens_folder}/soundcloud'
 
 CRITICS_FOLDER = f'{_csvs_folder}/critics'
 
@@ -73,3 +94,7 @@ AZURE_REDIRECT_URI = _config['azure']['redirect_uri']
 AZURE_SCOPE = _config['azure']['scope']
 AZURE_TENANT_ID = _config['azure']['tenant_id']
 AZURE_VINYLS_FOLDER = _config['azure']['vinyl_folder_path']
+
+GCP_S_PROJECT_ID = _config['gcp']['project_id']
+GCP_S_ACCOUNT_NAME = _config['gcp']['account_name']
+GCP_S_BUCKET_NAME = _config['gcp']['bucket_name']

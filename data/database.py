@@ -4,6 +4,7 @@ from datetime import datetime, date as dtdate
 import json
 import time
 from collections import Counter
+import re
 
 from pandas import read_sql, isna
 from numpy import integer, floating
@@ -54,7 +55,10 @@ class Neon:
     def mark_time(self):
         self.stopwatch = time.time()
 
-    ''' basic DB functions '''    
+    ''' basic DB functions '''
+    def strip(self, sql):
+        return re.sub(r'\s+', ' ', sql).strip()
+
     def execute(self, sql=None, commit=True):
         self.reconnect()
 
@@ -62,14 +66,14 @@ class Neon:
             for s in sql:
                 self.execute(s, commit=False)
         elif isinstance(sql, str):
-            self.connection.execute(text(sql))
+            self.connection.execute(text(self.strip(sql)))
 
         if commit:
             self.connection.commit()
             
     def read_sql(self, sql):
         self.reconnect()
-        return read_sql(sql, self.connection)
+        return read_sql(self.strip(sql), self.connection)
  
 
     ''' string functions '''
@@ -138,20 +142,22 @@ class Neon:
         pass
 
     def add_service(self, service_name, sources=[], various_artists_id=None):
-        sql = (f"WITH new_service_id AS "
-               f"(INSERT INTO services (service_name, various_artist_id) "
-               f"VALUES ({service_name}, {various_artists_id}) RETURNING service_id) "
-               f"INSERT INTO sources (service_id, source_name) "
-               f"VALUES (new_service_id, {self.dbify(sources)}) "
-               f";"
-               )
+        sql = (f'''
+               WITH new_service_id AS 
+               (INSERT INTO services (service_name, various_artist_id) 
+               VALUES ({service_name}, {various_artists_id}) RETURNING service_id) 
+               INSERT INTO sources (service_id, source_name) 
+               VALUES (new_service_id, {self.dbify(sources)}) 
+               ''')
         self.execute(sql)
         
     def add_user(self, first_name, last_name, image_src=None):
-        sql = (f"INSERT INTO users (first_name, last_name, image_src) "
-               f"VALUES ({first_name}, {last_name}, {image_src}) "
-               f"RETURNING user_id;"
-               )
+        sql = (f'''
+               INSERT INTO users (first_name, last_name, image_src) 
+               VALUES ({first_name}, {last_name}, {image_src}) 
+               RETURNING user_id
+               ;
+               ''')
         user_id = self.execute(sql)
         return user_id
         
@@ -159,9 +165,10 @@ class Neon:
         attributes = ['first_name', 'last_name', 'image_src']
         attribute_cols = [first_name, last_name, image_src]
         set_attributes = [f'{a} = {self.dbify(c)}' for a, c in zip(attributes, attribute_cols) if c is not None]
-        set_service = f'service_user_ids = service_user_ids || {self.dbify(service_user_ids)}' if service_user_ids else ''
-        sets = ', '.join(set_attributes + set_service)
-        sql = f'"UPDATE users SET {sets} WHERE user_id = {user_id};'
+        if service_user_ids:
+            set_attributes.append(f'service_user_ids = service_user_ids || {self.dbify(service_user_ids)}')
+        sets = ', '.join(set_attributes)
+        sql = f'UPDATE users SET {sets} WHERE user_id = {user_id};'
         self.execute(sql)
 
     ''' update data from pull '''
@@ -185,27 +192,30 @@ class Neon:
             conflict_columns = ', '.join(s_id + pk_columns)
             excludes = ', '.join(f'{c} = EXCLUDED.{c}' for c in columns if c not in pk_columns)
             do_update = f'UPDATE SET {excludes}' if updatable else 'NOTHING'
-            sql = (f'INSERT INTO {table_name} ({insert_columns}) VALUES {values} '
-                   f'ON CONFLICT ({conflict_columns}) DO {do_update} '
-                   )
+            sql = (f'''
+                   INSERT INTO {table_name} ({insert_columns}) VALUES {values} 
+                   ON CONFLICT ({conflict_columns}) DO {do_update} 
+                   ''')
         else:
             # updating
             if updatable:
                 sets = ', '.join(self.set_update_column(c, 'updt', '>' if c in greatest_dates else '<' if c in least_dates else '=') for c in columns if c not in s_id + pk_columns)
                 ases = ', '.join(s_id + columns)
-                sql = (f'UPDATE {table_name} SET {sets} FROM (VALUES {values}) '
-                       f'AS updt({ases}) WHERE {wheres} '
-                       )
+                sql = (f'''
+                       UPDATE {table_name} SET {sets} FROM (VALUES {values}) 
+                       AS updt({ases}) WHERE {wheres} 
+                       ''')
             else:
                 sql = None
                 
         if sql:
             if drop:
                 drops = ', '.join(drop)
-                sql = (f"WITH upsert AS ({sql} RETURNING {conflict_columns}) "
-                       f"DELETE FROM {table_name} WHERE ({drops}) IN (SELECT DISTINCT {drops} FROM upsert) "
-                       f"AND ({conflict_columns}) NOT IN (SELECT {conflict_columns} FROM upsert) "
-                       )
+                sql = (f'''
+                       WITH upsert AS ({sql} RETURNING {conflict_columns}) 
+                       DELETE FROM {table_name} WHERE ({drops}) IN (SELECT DISTINCT {drops} FROM upsert) 
+                       AND ({conflict_columns}) NOT IN (SELECT {conflict_columns} FROM upsert) 
+                       ''')
             sql += ';'
             
         self.execute(sql)
@@ -222,14 +232,15 @@ class Neon:
         return update_column
 
     def update_data_updates(self, table_name, start_date=None, end_date=None):
-        sql = (f"INSERT INTO _data_updates (table_name, start_date, end_date) "
-               f"VALUES ('{table_name}', {self.dbify(start_date)}, {self.dbify(end_date)}) "
-               f"ON CONFLICT (table_name) DO UPDATE SET "
-               f"start_date = LEAST(_data_updates.start_date, EXCLUDED.start_date), "
-               f"end_date = GREATEST(_data_updates.end_date, EXCLUDED.end_date) "
-               f"WHERE _data_updates.table_name = '{table_name}' "
-               f";"
-               )
+        sql = (f'''
+               INSERT INTO _data_updates (table_name, start_date, end_date) 
+               VALUES ('{table_name}', {self.dbify(start_date)}, {self.dbify(end_date)}) 
+               ON CONFLICT (table_name) DO UPDATE SET 
+               start_date = LEAST(_data_updates.start_date, EXCLUDED.start_date), 
+               end_date = GREATEST(_data_updates.end_date, EXCLUDED.end_date) 
+               WHERE _data_updates.table_name = '{table_name}' 
+               ;
+               ''')
         self.execute(sql)
             
     def update_artists(self, artists_df, service_id):
@@ -303,10 +314,11 @@ class Neon:
     ''' manual changes '''       
     def update_album_rating(self, user_id, source_id, album_uri, rating):
         # need to ensure that rankings are adjusted -- can't have a B+ album above an A-
-        sql = (f"UPDATE ownerships SET rating = {rating} WHERE user_id = {self.dbify(user_id)} "
-               f"AND source_id = {self.dbify(source_id)} AND album_uri = {self.dbify(album_uri)} "
-               f";"
-               )
+        sql = (f'''
+               UPDATE ownerships SET rating = {rating} WHERE user_id = {self.dbify(user_id)} 
+               AND source_id = {self.dbify(source_id)} AND album_uri = {self.dbify(album_uri)} 
+               ;
+               ''')
         self.execute(sql)
 
     def get_album_comparisons(self, user_id, excluded_categories=['single', 'playlist'], allow_repeats=False):
@@ -316,10 +328,11 @@ class Neon:
             excludes = ''
             
         if allow_repeats:
-            owned_with = ('owned_categories AS '
-                          '(SELECT category FROM release_categories WHERE category IN '
-                          '(SELECT category FROM availabe_categories WHERE num_albums > 1)), '
-                          )
+            owned_with = (f'''
+                          owned_categories AS 
+                          (SELECT category FROM release_categories WHERE category IN 
+                          (SELECT category FROM availabe_categories WHERE num_albums > 1)), 
+                          ''')
             first_pick_where = 'WHERE category IN (SELECT category FROM owned_categories) '
             second_pick_where = ''
 
@@ -328,41 +341,42 @@ class Neon:
             first_pick_where = 'JOIN availabe_categories USING (user_id, category) WHERE num_played < num_albums '            
             second_pick_where = 'AND NOT (SELECT played FROM first_pick) @> jsonb_build_array(source_id, album_uri) '
 
-        sql = (f"WITH release_categories AS "
-               f"(SELECT user_id, source_id, album_uri, category, "
-               f"COALESCE(wins || losses, jsonb_build_array(NULL)) AS played, "
-               f"COALESCE(jsonb_array_length(wins || losses), 0) AS num_played "
-               f"FROM ownerships JOIN album_categories USING (source_id, album_uri) "
-               f"WHERE user_id = {user_id} {excludes}), "
+        sql = (f'''
+               WITH release_categories AS 
+               (SELECT user_id, source_id, album_uri, category, 
+               COALESCE(wins || losses, jsonb_build_array(NULL)) AS played, 
+               COALESCE(jsonb_array_length(wins || losses), 0) AS num_played 
+               FROM ownerships JOIN album_categories USING (source_id, album_uri) 
+               WHERE user_id = {user_id} {excludes}), 
                
-               f"availabe_categories AS "
-               f"(SELECT user_id, category, COUNT(*) AS num_albums FROM release_categories "
-               f"GROUP BY category, user_id), "
+               availabe_categories AS 
+               (SELECT user_id, category, COUNT(*) AS num_albums FROM release_categories 
+               GROUP BY category, user_id), 
                
-               f"{owned_with} "
+               {owned_with} 
               
-               f"first_pick AS "
-               f"(SELECT source_id, album_uri, category, played FROM release_categories "
-               f"{first_pick_where} "
-               f"ORDER BY RANDOM() LIMIT 1), "
+               first_pick AS 
+               (SELECT source_id, album_uri, category, played FROM release_categories 
+               {first_pick_where} 
+               ORDER BY RANDOM() LIMIT 1), 
 
-               f"second_pick AS "
-               f"(SELECT source_id, album_uri, category FROM release_categories "
-               f"WHERE category = (SELECT category FROM first_pick) "
-               f"AND (source_id, album_uri) != (SELECT source_id, album_uri FROM first_pick) "
-               f"{second_pick_where} "
-               f"ORDER BY RANDOM() LIMIT 1), "
+               second_pick AS 
+               (SELECT source_id, album_uri, category FROM release_categories 
+               WHERE category = (SELECT category FROM first_pick) 
+               AND (source_id, album_uri) != (SELECT source_id, album_uri FROM first_pick) 
+               {second_pick_where} 
+               ORDER BY RANDOM() LIMIT 1), 
                
-               f"picks AS (SELECT source_id, album_uri, category FROM first_pick "
-               f"UNION SELECT source_id, album_uri, category FROM second_pick)  "
+               picks AS (SELECT source_id, album_uri, category FROM first_pick 
+               UNION SELECT source_id, album_uri, category FROM second_pick)  
 
-               f"SELECT user_id, source_id, album_uri, category, album_name, artist_names, ranking "
-               f"FROM picks JOIN albums USING (source_id, album_uri) "
-               f"JOIN ownerships USING (source_id, album_uri) JOIN sources USING (source_id) "
-               f"JOIN album_artists USING (source_id, album_uri) "
-               f"LEFT JOIN release_battles USING (user_id, source_id, album_uri) "
-               f";"
-               )
+               SELECT user_id, source_id, album_uri, category, album_name, artist_names, ranking 
+               FROM picks JOIN albums USING (source_id, album_uri) 
+               JOIN ownerships USING (source_id, album_uri) JOIN sources USING (source_id) 
+               JOIN album_artists USING (source_id, album_uri) 
+               LEFT JOIN release_battles USING (user_id, source_id, album_uri) 
+               ;
+               ''')
         albums_df = self.read_sql(sql)
         return albums_df
         
@@ -376,63 +390,67 @@ class Neon:
         winner = self.dbify([source_id_w, album_uri_w])
         where_l = f"{user_id}, {source_id_l}, '{album_uri_l}'"
         loser = self.dbify([source_id_l, album_uri_l])
-        sqls = [(f"WITH win_list_w AS "
-                 f"(SELECT jsonb_array_elements(wins) AS win_value FROM ownerships "
-                 f"WHERE (user_id, source_id, album_uri) = ({where_w})), "
+        sqls = [(f'''
+                 WITH win_list_w AS 
+                 (SELECT jsonb_array_elements(wins) AS win_value FROM ownerships 
+                 WHERE (user_id, source_id, album_uri) = ({where_w})), 
                       
-                 f"loss_list_w AS "
-                 f"(SELECT jsonb_array_elements(losses) AS loss_value FROM ownerships "
-                 f"WHERE (user_id, source_id, album_uri) = ({where_w})) "
+                 loss_list_w AS 
+                 (SELECT jsonb_array_elements(losses) AS loss_value FROM ownerships 
+                 WHERE (user_id, source_id, album_uri) = ({where_w})) 
                       
-                 f"UPDATE ownerships SET "
-                 f"wins = jsonb_build_array({loser}) || "
-                 f"COALESCE((SELECT jsonb_agg(win_value) FROM win_list_w WHERE win_value <> {loser}), '[]'::jsonb), "
-                 f"losses = (SELECT jsonb_agg(loss_value) FROM loss_list_w WHERE loss_value <> {loser}) "
-                 f"WHERE (user_id, source_id, album_uri) = ({where_w}) "
-                 f";"
-                 ),
-                (f"WITH win_list_l AS "
-                 f"(SELECT jsonb_array_elements(wins) AS win_value FROM ownerships "
-                 f"WHERE (user_id, source_id, album_uri) = ({where_l})), "
+                 UPDATE ownerships SET 
+                 wins = jsonb_build_array({loser}) || 
+                 COALESCE((SELECT jsonb_agg(win_value) FROM win_list_w WHERE win_value <> {loser}), '[]'::jsonb), 
+                 losses = (SELECT jsonb_agg(loss_value) FROM loss_list_w WHERE loss_value <> {loser}) 
+                 WHERE (user_id, source_id, album_uri) = ({where_w}) 
+                 ;
+                 '''),
+                (f'''
+                 WITH win_list_l AS 
+                 (SELECT jsonb_array_elements(wins) AS win_value FROM ownerships 
+                 WHERE (user_id, source_id, album_uri) = ({where_l})), 
                      
-                 f"loss_list_l AS "
-                 f"(SELECT jsonb_array_elements(losses) AS loss_value FROM ownerships "
-                 f"WHERE (user_id, source_id, album_uri) = ({where_l})) "
+                 loss_list_l AS 
+                 (SELECT jsonb_array_elements(losses) AS loss_value FROM ownerships 
+                 WHERE (user_id, source_id, album_uri) = ({where_l})) 
                       
-                 f"UPDATE ownerships SET "
-                 f"wins = (SELECT jsonb_agg(win_value) FROM win_list_l WHERE win_value <> {winner}), "
-                 f"losses = jsonb_build_array({winner}) || "
-                 f"COALESCE((SELECT jsonb_agg(loss_value) FROM loss_list_l WHERE loss_value <> {winner}), '[]'::jsonb) "
-                 f"WHERE (user_id, source_id, album_uri) = ({where_l}) "
-                 f";"
-                 ),
+                 UPDATE ownerships SET 
+                 wins = (SELECT jsonb_agg(win_value) FROM win_list_l WHERE win_value <> {winner}), 
+                 losses = jsonb_build_array({winner}) || 
+                 COALESCE((SELECT jsonb_agg(loss_value) FROM loss_list_l WHERE loss_value <> {winner}), '[]'::jsonb) 
+                 WHERE (user_id, source_id, album_uri) = ({where_l}) 
+                 ;
+                 '''),
                 ]
         self.execute(sqls)
 
     def get_album_to_rate(self, user_id, unrated=False):
         wheres = ' AND rating IS NULL ' if unrated else ''
-        sql = (f"SELECT source_id, album_uri, artist_names, album_name, rating FROM ownerships "
-               f"JOIN albums USING (source_id, album_uri) JOIN sources USING (source_id) "
-               f"JOIN album_artists USING (source_id, album_uri) "
-               f"WHERE user_id = {user_id}{wheres} "
-               f"ORDER BY RANDOM() LIMIT 1"
-               f";"
-               )
+        sql = (f'''
+               SELECT source_id, album_uri, artist_names, album_name, rating FROM ownerships 
+               JOIN albums USING (source_id, album_uri) JOIN sources USING (source_id) 
+               JOIN album_artists USING (source_id, album_uri) 
+               WHERE user_id = {user_id}{wheres} 
+               ORDER BY RANDOM() LIMIT 1
+               ;
+               ''')
         album_s = self.read_sql(sql).squeeze()
         return album_s
 
     def get_album_summary(self, user_id, max_ranking=5):
         categories = ['studio', 'compilation', 'soundtrack', 'score']
         cases = ' '.join(f"WHEN '{category}' THEN {i}" for i, category in enumerate(categories)) + f' ELSE {len(categories)}'
-        sql = (f"SELECT artist_names, album_name, category, ranking, rating "
-               f"FROM ownerships JOIN release_battles USING (user_id, source_id, album_uri) "
-               f"JOIN album_categories USING (source_id, album_uri) "
-               f"JOIN albums USING (source_id, album_uri) JOIN sources USING (source_id) "
-               f"JOIN album_artists USING (source_id, album_uri) "
-               f"WHERE user_id = {user_id} AND release_battles.ranking <= {max_ranking} "
-               f"ORDER BY CASE category {cases} END, ranking ASC, rating DESC "
-               f";"
-               )
+        sql = (f'''
+               SELECT artist_names, album_name, category, ranking, rating 
+               FROM ownerships JOIN release_battles USING (user_id, source_id, album_uri) 
+               JOIN album_categories USING (source_id, album_uri) 
+               JOIN albums USING (source_id, album_uri) JOIN sources USING (source_id) 
+               JOIN album_artists USING (source_id, album_uri) 
+               WHERE user_id = {user_id} AND release_battles.ranking <= {max_ranking} 
+               ORDER BY CASE category {cases} END, ranking ASC, rating DESC 
+               ;
+               ''')
         albums_df = self.read_sql(sql)
         return albums_df
 
@@ -465,10 +483,11 @@ class Neon:
         return updates_df
     
     def get_data_updates(self, table_name):
-        sql = (f"SELECT start_date, end_date FROM _data_updates "
-               f"WHERE table_name = '{table_name}' "
-               f";"
-               )
+        sql = (f'''
+               SELECT start_date, end_date FROM _data_updates 
+               WHERE table_name = '{table_name}' 
+               ;
+               ''')
         data_updates_df = self.read_sql(sql)
         if len(data_updates_df):
             start_date, end_date = data_updates_df.iloc[0][['start_date', 'end_date']]
@@ -513,7 +532,7 @@ class Neon:
         return start_date, end_date
     
     def get_critics_to_update(self):
-        sql = (f"SELECT DISTINCT critic_name, list_year FROM critics;")
+        sql = (f'SELECT DISTINCT critic_name, list_year FROM critics;')
         excludes = self.read_sql(sql)
         return excludes
 
@@ -523,12 +542,18 @@ class Neon:
         return user_ids
     
     def get_user(self, user_id):
-        sql = (f'SELECT * FROM users '
-               f'WHERE user_id = {self.dbify(user_id)}'
-               f';'
-               )
+        sql = (f'''
+               SELECT * FROM users 
+               WHERE user_id = {self.dbify(user_id)}
+               ;
+               ''')
         user_s = self.read_sql(sql).squeeze()
         return user_s
+    
+    def get_users(self):
+        sql = ('SELECT * FROM users;')
+        users_df = self.read_sql(sql)
+        return users_df
    
 
     ''' get data for push '''

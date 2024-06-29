@@ -14,7 +14,8 @@ from spotipy.cache_handler import MemoryCacheHandler
 
 from common.secret import get_secret, get_token
 from common.structure import (SPOTIFY_AUTH_URL, SPOTIFY_LOGIN_URL, SPOTIFY_TOKENS_FOLDER,
-                              SPOTIFY_REDIRECT_URI, SPOTIFY_SCOPE, SPOTIFY_PLAYLIST_WORD)
+                              SPOTIFY_REDIRECT_URI, SPOTIFY_SCOPE, SPOTIFY_PLAYLIST_WORD,
+                              SPOTIFY_RATE_LIMIT, SPOTIFY_QUERY_LIMIT)
 from music.dsp import DSP
 
 class Spotter(DSP):
@@ -22,9 +23,9 @@ class Spotter(DSP):
     
     auth_url = SPOTIFY_AUTH_URL
     login_url = SPOTIFY_LOGIN_URL
-    api_limit = 50 #100
-    api_rate_limit = 3 # calls per second
-    
+    api_rate_limit = SPOTIFY_RATE_LIMIT
+    api_query_limit = SPOTIFY_QUERY_LIMIT
+        
     vinyl_word = SPOTIFY_PLAYLIST_WORD
 
     def __init__(self):
@@ -348,10 +349,10 @@ class Spotter(DSP):
     def get_tracks_info(self, track_uris):
         total_rows = len(track_uris)
         info_tracks = {}
-        max_rows = ceil(total_rows/self.api_limit)
+        max_rows = ceil(total_rows/self.api_query_limit)
         for i in range(max_rows):
             self.show_progress(i, max_rows)
-            track_uris__0 = track_uris[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
+            track_uris__0 = track_uris[i*self.api_query_limit:min((i+1)*self.api_query_limit, total_rows)]
             info__tracks = {}
             
             results = self.sp.tracks(track_uris__0)
@@ -379,10 +380,10 @@ class Spotter(DSP):
     def get_soundtrack_info(self, track_uris):
         total_rows = len(track_uris)
         info_tracks = {}
-        max_rows = ceil(total_rows/self.api_limit)
+        max_rows = ceil(total_rows/self.api_query_limit)
         for i in range(max_rows):
             self.show_progress(i, max_rows)
-            track_uris__0 = track_uris[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
+            track_uris__0 = track_uris[i*self.api_query_limit:min((i+1)*self.api_query_limit, total_rows)]
             info__tracks = {}
             
             results = self.sp.audio_features(track_uris__0)
@@ -407,10 +408,10 @@ class Spotter(DSP):
     def get_artists_info(self, artist_uris):
         total_rows = len(artist_uris)
         info_artists = {}
-        max_rows = ceil(total_rows/self.api_limit)
+        max_rows = ceil(total_rows/self.api_query_limit)
         for i in range(max_rows):
             self.show_progress(i, max_rows)
-            artist_uris__0 = artist_uris[i*self.api_limit:min((i+1)*self.api_limit, total_rows)]
+            artist_uris__0 = artist_uris[i*self.api_query_limit:min((i+1)*self.api_query_limit, total_rows)]
             info__artists = {}
             
             results = self.sp.artists(artist_uris__0)

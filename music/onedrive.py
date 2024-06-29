@@ -9,7 +9,7 @@ import requests
 
 from common.secret import get_secret, get_token
 from common.structure import (AZURE_LOGIN_URL, AZURE_GRAPH_URL, AZURE_TOKENS_FOLDER,
-                              AZURE_SCOPE, AZURE_VINYLS_FOLDER)
+                              AZURE_SCOPE, AZURE_VINYLS_FOLDER, AZURE_RATE_LIMIT)
 from music.dsp import DSP
 
 class Driver(DSP):
@@ -17,6 +17,7 @@ class Driver(DSP):
 
     login_url = AZURE_LOGIN_URL
     graph_url = AZURE_GRAPH_URL
+    api_rate_limit = AZURE_RATE_LIMIT
     skiptoken = '$skiptoken'
     
     vinyls_path = AZURE_VINYLS_FOLDER
@@ -54,6 +55,7 @@ class Driver(DSP):
                     'grant_type': 'refresh_token',
                     'refresh_token': refresh_token}
             response = requests.post(f'{self.login_url}/token', data=data, headers=self.get_header())
+            self.sleep()
         
             if response.ok:
                 params = response.json()
@@ -71,7 +73,7 @@ class Driver(DSP):
     def get_query(self, resource, params={}):
         # for one single query
         response = requests.get(f'{self.graph_url}/{resource}', params=params, headers=self.get_auth_headers_form())
-        ## self.sleep()
+        self.sleep()
         if response.ok:
             return response
         else:
@@ -84,7 +86,7 @@ class Driver(DSP):
         more = True
         while more:
             response = requests.get(f'{self.graph_url}/{resource}', params=params, headers=self.get_auth_headers_form())
-            ## self.sleep()
+            self.sleep()
             if response.ok:
                 values.extend(response.json()['value'])
                 more = response.json().get('@odata.nextLink', False)
@@ -116,7 +118,7 @@ class Driver(DSP):
                 '@microsoft.graph.conflictBehavior': 'fail'}
         response = requests.post(f'{self.graph_url}/drives/{self.drive_id}/items/{parent_id}/children',
                                  json=data, headers=self.get_auth_headers_json())
-        ## self.sleep()
+        self.sleep()
         if response.ok:
             return response.json()
         else:

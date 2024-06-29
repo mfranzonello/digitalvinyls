@@ -1,10 +1,7 @@
 ''' Fill out library '''
 
 from setup import set_up_database, is_updatable
-from music.spotify import Spotter
-from music.soundcloud import Sounder
-from music.onedrive import Driver
-from music.musicbrainz import MusicBrainer
+from music.services import UserServices, MusicBrainer
         
 def update_tracks(neon, DSPs):
     for S in DSPs:
@@ -71,7 +68,7 @@ def update_barcodes(neon):
         service.connect()
         albums_df = service.find_barcodes_data(albums_df)
         if is_updatable(albums_df):
-            neon.update_upcs(albums_df, )
+            neon.update_upcs(albums_df)
         service.disconnect()
         
     albums_df = neon.get_barcodes_to_update()
@@ -85,12 +82,10 @@ def update_barcodes(neon):
         
 def main():
     neon = set_up_database()
-    
-    DSPs = [Spotter, Sounder, Driver]
      
-    update_tracks(neon, DSPs)
-    update_artists(neon, DSPs)
-    update_soundtracks(neon, DSPs)
+    update_tracks(neon, UserServices)
+    update_artists(neon, UserServices)
+    update_soundtracks(neon, UserServices)
     update_recordings(neon)
     update_works(neon)
     update_barcodes(neon)

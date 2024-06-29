@@ -24,3 +24,10 @@ azure:
   scope: [User.Read, Files.ReadWrite]
   vinyl_folder_path: 'music/vinyls'
   release_types: [single, ep, album]
+
+gcp:
+  redirect_uri: 'http://localhost:3000/oauth2callback'
+  bucket_name: digitalvinyls
+  project_id: digitalvinyls
+  account_name: playpaws
+  service_account: service-1022195732905@gs-project-accounts.iam.gserviceaccount.com

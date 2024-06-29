@@ -1,9 +1,7 @@
 ''' Get data to build library '''
 
 from setup import set_up_database, set_up_user, is_updatable
-from music.spotify import Spotter
-from music.onedrive import Driver
-from music.soundcloud import Sounder
+from music.services import UserServices
 
 def update_albums(neon, DSPs, user):
     for S in DSPs:
@@ -38,13 +36,12 @@ def update_pulls(neon, albums_df, artists_df, ownerships_df, service_id, source_
         neon.update_ownerships(ownerships_df, source_id, user.user_id)
 
 def main():
-    DSPs = [Spotter, Driver, Sounder]
     neon = set_up_database()
     user_ids = neon.get_user_ids()
     
     for user_id in user_ids:
         user = set_up_user(neon, user_id)
-        update_albums(neon, DSPs, user)    
+        update_albums(neon, UserServices, user)    
 
 if __name__ == '__main__':
     main()

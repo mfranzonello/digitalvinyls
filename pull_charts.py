@@ -1,8 +1,7 @@
 ''' See what the general public says '''
 
 from setup import set_up_database, is_updatable
-from music.billboard import BBer
-from music.magazine import Critic
+from music.services import BBer, Critic
         
 def update_charts(neon):
     service = BBer()

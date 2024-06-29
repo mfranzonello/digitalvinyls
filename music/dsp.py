@@ -21,6 +21,7 @@ class Service(Printer, Caller, Texter):
     min_album_duration = 20
     
     api_rate_limit = 1
+    
     def __init__(self):
         Printer.__init__(self)
         Caller.__init__(self)
@@ -32,8 +33,8 @@ class Service(Printer, Caller, Texter):
     def disconnect(self):
         pass
     
-    def sleep(self):
-        sleep(1/self.api_rate_limit)
+    def sleep(self, multiplier=1):
+        sleep(multiplier/self.api_rate_limit)
         
     def announce(self, message):
         print(f'{message} from {self.name}')

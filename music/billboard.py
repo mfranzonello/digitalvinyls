@@ -5,15 +5,16 @@ from datetime import datetime, timedelta
 from pandas import DataFrame
 from billboard import ChartData
 
+from common.structure import BILLBOARD_RATE_LIMIT
 from music.dsp import Service
 
 class BBer(Service):
     name = 'Billboard'
+    api_rate_limit = BILLBOARD_RATE_LIMIT
     
     chart_start = datetime(1963, 1, 5) # the first Billboard 200 chart
     def __init__(self):
         super().__init__()
-        self.api_rate_limit = 3
            
     def get_billboard_albums(self, start_date, end_date, limit=100):
         restrictions = start_date and end_date
