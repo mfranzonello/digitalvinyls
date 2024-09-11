@@ -9,3 +9,5 @@ selenium==4.18.1
 six==1.16.0
 soco==0.30.4
 pyyaml==6.0.1
+google-api-python-client==2.136.0
+google-auth-oauthlib==1.2.0

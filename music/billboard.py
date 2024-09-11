@@ -1,12 +1,12 @@
-''' Streaming music sources and libraries '''
+''' Billboard API functions '''
 
 from datetime import datetime, timedelta
 
 from pandas import DataFrame
 from billboard import ChartData
 
-from common.structure import BILLBOARD_RATE_LIMIT
-from music.dsp import Service
+from ..common.structure import BILLBOARD_RATE_LIMIT
+from .dsp import Service
 
 class BBer(Service):
     name = 'Billboard'

@@ -1,25 +1,38 @@
+''' Authenticate a user to access SoundCloud '''
+
 import re
-import os
-import sys
 
 import requests
+from flask import redirect, request, session, url_for, render_template, Blueprint
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common.structure import SOUNDCLOUD_PLAY_URL, SOUNDCLOUD_SEARCH_URL, SOUNDCLOUD_TOKENS_FOLDER, write_json
-from data.database import Neon
+from ..common.structure import PROFILES_FOLDER, SOUNDCLOUD_PLAY_URL, SOUNDCLOUD_SEARCH_URL, SOUNDCLOUD_TOKENS_FOLDER
+from ..common.tokens import save_token, update_profile
 
-neon = Neon()
-users_df = neon.get_users()
-print('Choose the user you want to add SoundCloud to: ')
-for i, user_s in users_df.iterrows():
-    print(f'[{i+1}] {user_s["first_name"]} {user_s["last_name"]}')
-user_s = users_df.loc[int(input('=> '))-1]
+soundcloud_auth = Blueprint('soundcloud_auth', __name__)
 
-username = input(f'Enter the SoundCloud username for {user_s["first_name"]} {user_s["last_name"]}: ')
-response = requests.get(f'{SOUNDCLOUD_PLAY_URL}/{username}')
-user_uri = re.search('"uri":"https://api.soundcloud.com/users/(\d+)', response.text).group(1)
+@soundcloud_auth.route('/<email>', methods=['GET', 'POST'])
+def authorize(email):
+    match request.method:
+        case 'GET':
+            session['profile_email'] = email
+            return render_template('authorize.html', service_name='SoundCloud')
+        
+        case 'POST':
+            username = request.form.get('username')
+            response = requests.get(f'{SOUNDCLOUD_PLAY_URL}/{username}')
+            user_search = re.search('"uri":"https://api.soundcloud.com/users/(\d+)', response.text) 
+            
+            if user_search:
+                # found a match
+                user_uri = user_search.group(1)
+                user_data = {'username': username, 'user_id': user_uri}
+                profile_data = {'soundcloud': user_uri}
+            
+                save_token(SOUNDCLOUD_TOKENS_FOLDER, user_uri, user_data)
+                update_profile(PROFILES_FOLDER, session['profile_email'], profile_data)
 
-write_json(SOUNDCLOUD_TOKENS_FOLDER, user_s['user_email'], {'username': username, 'user_id': user_uri})
-
-service_user_id = {'SoundCloud': user_uri}
-neon.update_user(user_s['user_id'], service_user_ids=service_user_id)
+                return redirect(url_for('profiles'))
+            
+            else:
+                # no match found
+                return 'No match found', 400

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Authorize</title>
+</head>
+<body>
+    <h1>Authorize {{ service_name }}</h1>
+    {% if True %}
+        <form method="POST">
+            <label for="username">{{ service_name }} Username:</label>
+            <input type="text" id="username" name="username" required><br>
+            <button type="submit">Search for {{ service_name }} Username</button>
+        </form>
+        <a href="{{ url_for('profiles') }}">Cancel</a>
+    {% else %}
+        <div>Test</div>
+    {% endif %}
+</body>
+</html>

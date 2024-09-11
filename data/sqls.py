@@ -2,151 +2,172 @@
 
 class SQLer:
     tables = [{'name': 'services',
-               'columns': [['service_id', 'serial'],
-                           ['service_name', 'varchar'],
-                           ['various_artist_uri', 'varchar'],
-                           ['explicits', 'boolean'],
-                           ['audio_analysis', 'boolean']
-                           ],
-               'pk': ['service_id'],
-               'unique': ['service_name', 'service_source'],
+               'sql': ('''
+                       service_id serial,
+                       service_name varchar,
+                       various_artist_uri varchar,
+                       explicits boolean,
+                       audio_analysis boolean,
+                       PRIMARY KEY (service_id)
+                       '''),
                },
               {'name': 'sources',
-               'columns': [['source_id', 'serial'],
-                           ['service_id', 'int'],
-                           ['source_name', 'varchar'],
-                           ],
-               'pk': ['source_id'],
-               'fk': [[['service_id'], 'services'],
-                      ],               
-               'unique': ['service_id', 'service_source'],
+               'sql': ('''
+                       source_id serial,
+                       serivce_id integer,
+                       source_name varchar,
+                       PRIMARY KEY (source_id),
+                       FOREIGN KEY (service_id) REFERENCES services (service_id),
+                       UNIQUE (service_id, service_source)
+                       ''')
                }, 
-              {'name': 'users',
-               'columns': [['user_id', 'serial'],
-                           ['first_name', 'varchar'],
-                           ['last_name',  'varchar'],
-                           ['service_user_ids', 'jsonb'],
-                           ['image_src', 'varchar'],
-                           ],
-               'pk': ['user_id'],
-               },
+              {'name': 'profiles',
+               'sql': ('''
+                       user_id serial,
+                       first_name varchar,
+                       last_name varchar,
+                       user_email varchar,
+                       PRIMARY KEY user_id,
+                       UNIQUE user_email
+                       '''),
+               },        
               {'name': 'artists',
-               'columns': [['service_id', 'integer'],
-                           ['artist_uri', 'varchar'],
-                           ['artist_name', 'varchar'],
-                           ],
-               'pk': ['service_id', 'artist_uri'],
-               'fks': [[['service_id'], 'services'],
-                       ],
+               'sql': ('''
+                       service_id integer,
+                       artist_uri varchar,
+                       artist_name varchar,
+                       PRIMARY KEY (service_id, artist_uri),
+                       FOREIGN KEY (service_id) REFERENCES services (service_id)
+                       ''')
                },
               {'name': 'albums',
-               'columns': [['source_id', 'integer'],
-                           ['album_uri', 'varchar'],
-                           ['artist_uris', 'jsonb'],
-                           ['album_name', 'varchar'],
-                           ['album_type', 'varchar'],
-                           ['genres', 'jsonb'],
-                           ['release_date', 'timestamp'],
-                           ['image_src', 'varchar'],
-                           ['track_uris', 'jsonb'],
-                           ['album_duration', 'numeric'],
-                           ['upc', 'varchar'],
-                           ],         
-               'pk': ['source_id', 'album_uri'],
-               'fk': [[['source_id'], 'sources'],
-                      ],
+               'sql': ('''
+                       source_id integer,
+                       album_uri varchar,
+                       artist_uris jsonb,
+                       album_name varchar,
+                       album_type varchar,
+                       genres jsonb,
+                       release_date timestamp,
+                       image_src varchar,
+                       track_uris jsonb,
+                       album_duration numeric,
+                       upc varchar,
+                       mb_id varchar,
+                       lastfm_id varchar,
+                       PRIMARY KEY (source_id, album_uri),
+                       FOREIGN KEY (source_id) REFERENCES sources (source_id)
+                       '''),
                },
               {'name': 'ownerships',
-               'columns': [['user_id', 'integer'],
-                           ['source_id', 'integer'],
-                           ['album_uri', 'varchar'],
-                           ['like_date', 'timestamp'],
-                           ['rating', 'integer'],
-                           ],
-               'pk': ['user_id', 'source_id', 'album_uri'],
-               'fks': [[['user_id'], 'users'],
-                       [['source_id', 'album_uri'], 'albums'],
-                       ],
+               'sql': ('''
+                       user_id integer,
+                       source_id integer,
+                       album_uri varchar,
+                       like_date timestamp,
+                       rating integer,
+                       wins jsonb,
+                       losses json,
+                       PRIMARY KEY (user_id, source_id, album_uri),
+                       FOREIGN KEY (user_id) REFERENCES profiles (user_id),
+                       FOREIGN KEY (source_id, album_uri) REFERENCES albums (source_id, album_uri)
+                       '''),
                },
               {'name': 'tracks',
-               'columns': [['service_id', 'integer'],
-                           ['track_uri', 'varchar'],
-                           ['track_name', 'varchar'],
-                           ['track_duration', 'numeric'],
-                           ['artist_uris', 'jsonb'],
-                           ['isrc', 'varchar'],
-                           ['explicit', 'boolean']
-                           ],
-               'pk': ['service_id', 'track_uri'],
-               'fks': [[['service_id'], 'services'],
-                       ],
+               'sql': ('''
+                       serivce_id integer,
+                       track_uri varchar,
+                       track_name varchar,
+                       track_duration numeric,
+                       artist_uris jsonb,
+                       isrc varchar,
+                       explicit boolean,
+                       PRIMARY KEY (service_id, track_uri),
+                       FOREIGN KEY (service_id) REFERENCES services (service_id)
+                       '''),
                },
               {'name': 'series',
-               'columns': [['user_id', 'integer'],
-                           ['series_name', 'varchar'],
-                           ['album_list', 'jsonb'], # --> [[source_id, [album_uris]], [...]]
-                           ],
-               'pk': ['user_id', 'series_name'],
-               'fk': [[['user_id'], 'users']]
+               'sql': ('''
+                       user_id integer,
+                       series_name varchar,
+                       album_list jsonb,
+                       PRIMARY KEY (user_id, series_name),
+                       FOREIGN KEY (user_id) REFERENCES profiles (user_id)
+                       '''),
                },
               {'name': 'replacements',
-               'columns': [['source_id', 'integer'],
-                           ['album_uri', 'varchar'],
-                           ['replace_source_id', 'integer'],
-                           ['replace_album_uri', 'varchar'],
-                           ],
-               'pk': ['source_id', 'album_uri'],
-               'fks': [[['source_id', 'album_uri'], 'albums'],
-                       [{'replacement_source_id': 'source_id', 'replacement_album_uri': 'album_uri'}, 'albums'],
-                       ],
+               'sql': ('''
+                       source_id integer,
+                       album_uri varchar,
+                       replace_source_id integer,
+                       replace_album_uri varchar,
+                       PRIMARY KEY (source_id, album_uri),
+                       FOREIGN KEY (source_id, album_uri) REFERENCES albums (source_id, album_uri),
+                       FOREIGN KEY (replace_source_id, replace_album_uri) REFERENCES albums (source_id, album_uri)
+                       '''),
                },
               {'name': 'barcodes',
-               'columns': [['barcode_id', 'series'],
-                           ['upc', 'varchar'],
-                           ['release_type', 'varchar'],
-                           ],
-               'pk': ['barcode_id'],
-               'uniques': ['upc'],
+               'sql': ('''
+                       barcode_id serial,
+                       upc varchar,
+                       release_type varchar,
+                       PRIMARY KEY (barcode_id),
+                       FOREIGN KEY (upc) REFERENCES albums (upc),
+                       UNIQUE upc
+                       '''),
                },
               {'name': 'recordings',
-               'columns': [['isrc', 'varchar'],
-                           ['iswc', 'varchar'],
-                           ],
-               'pk': ['isrc'],
+               'sql': ('''
+                       isrc varchar,
+                       iswc varchar,
+                       PRIMARY KEY isrc
+                       '''),
                },
               {'name': 'works',
-               'columns': [['iswc', 'varchar'],
-                           ['release_year', 'date'],
-                           ],
-               'pk': ['iswc'],
+               'sql': ('''
+                       iswc varchar,
+                       release_year date,
+                       PRIMARY KEY iswc
+                       '''),
+               },
+              {'name': 'lastfm',
+               'sql': ('''
+                       source_id integer,
+                       album_uri varchar,
+                       release_type varchar,
+                       PRIMARY KEY(source_id, album_uri),
+                       FOREIGN KEY (source_id, album_uri) REFERENCES albums (source_id, album_uri)
+                       '''),
                },
               {'name': 'billboard',
-               'columns': [['album_title', 'varchar'],
-                           ['credit_names', 'varchar'],
-                           ['peak_position', 'integer'],
-                           ],
-               'pk': ['album_title', 'credit_names'],
+               'sql': ('''
+                       album_title varchar,
+                       credit_names varchar,
+                       peak_position integer,
+                       PRIMARY KEEY (album_tile, credit_names)
+                       '''),
                },
               {'name': 'critics',
-               'columns': [['critic_name', 'varchar'],
-                           ['list_year', 'integer'],
-                           ##['list_type', 'varchar'], #all_time, annual
-                           ['list_position', 'int'],
-                           ['album_name', 'varchar'],
-                           ['artist_names', 'jsonb'],
-                           ],
-               'pk': ['critic_name', 'list_year', 'list_position'],            
+               'sql': ('''
+                       critic_name VARCHAR,
+                       list_year INTEGER,
+                       list_position INTEGER,
+                       album_name VARCHAR,
+                       artist_names jsonb,
+                       PRIMARY KEY (critic_name, list_year, list_position)
+                       ''')
                },
               {'name': '_data_updates',
-               'columns': [['table_name', 'varchar'],
-                           ['start_date', 'date'],
-                           ['end_date', 'date'],
-                           ],
+               'sql': ('''
+                       table_name VARCHAR,
+                       start_date DATE,
+                       end_date DATE
+                       ''')
                },
               ]
   
     views = [{'name': 'compilations',
-              'sql': (f'''
+              'sql': ('''
                       WITH full_tracks AS 
                       (SELECT service_id, track_uri, release_year FROM tracks 
                       JOIN recordings USING (isrc) JOIN works USING (iswc)), 
@@ -165,7 +186,7 @@ class SQLer:
                       '''),
               },
              {'name': 'explicit_albums',
-              'sql': (f'''
+              'sql': ('''
                       SELECT source_id, album_uri, BOOL_OR(explicit) AS explicit 
                       FROM albums JOIN sources USING (source_id) 
                       JOIN tracks ON sources.service_id = tracks.service_id AND albums.track_uris ? tracks.track_uri 
@@ -173,7 +194,7 @@ class SQLer:
                       '''),
               },
              {'name': 'album_categories',
-              'sql': (f'''
+              'sql': ('''
                       WITH regex_soundtrack AS (SELECT '%(' || string_agg(phrase, '|') || ')%' 
                       AS soundtrack_words FROM keywords WHERE keyword = 'soundtrack'), 
                
@@ -208,7 +229,7 @@ class SQLer:
                       '''),
               },
              {'name': 'auto_skips',
-              'sql': (f'''
+              'sql': ('''
                       WITH regex_good_repeat AS (SELECT '%(' || string_agg(phrase, '|') || ')%' 
                       AS good_repeat FROM keywords WHERE keyword = 'good_repeat'), 
                       regex_bad_repeat AS (SELECT '%(' || string_agg(phrase, '|') || ')%' 
@@ -237,7 +258,7 @@ class SQLer:
                       '''),
               },
              {'name': 'track_lists',
-              'sql': (f'''
+              'sql': ('''
                       WITH played_tracks AS 
                       (SELECT source_id, album_uri, track_uri, ord 
                       FROM albums, jsonb_array_elements_text(track_uris) WITH ORDINALITY AS elems(track_uri, ord) 
@@ -250,7 +271,7 @@ class SQLer:
                       '''),
               },
              {'name': 'true_album_artists',
-              'sql': (f'''
+              'sql': ('''
                       WITH all_artists AS 
                       (SELECT source_id, album_uri, primary_artist_uri, ord, 
                       jsonb_array_length(track_uris) AS num_tracks 
@@ -275,9 +296,9 @@ class SQLer:
                       '''),
               },
              {'name': 'album_artists',
-              'sql': (f'''
+              'sql': ('''
                       SELECT source_id, album_uri, 
-                      string_agg(artist_name, '; ' ORDER BY ord) AS artist_names 
+                      jsonb_agg(artist_name ORDER BY ord) AS artist_names 
                       FROM (SELECT source_id, album_uri, artist_uri, ord 
                       FROM albums LEFT JOIN true_album_artists_2 USING (source_id, album_uri), 
                       jsonb_array_elements_text(COALESCE(primary_artist_uris, artist_uris)) 
@@ -287,7 +308,7 @@ class SQLer:
                       '''),
               },
              {'name': 'release_battles',
-              'sql': (f'''
+              'sql': ('''
                       WITH battles AS 
                       (SELECT user_id, source_id, album_uri, 
                       CASE WHEN wins IS NULL THEN 0.0 
@@ -311,7 +332,7 @@ class SQLer:
                       '''),
               },
              {'name': 'critic_stars',
-              'sql': (f'''
+              'sql': ('''
                       WITH critic_lists AS (SELECT DISTINCT critic_name, list_year FROM critics), 
                       weights AS (SELECT critic_name, 1/count(list_year)::numeric AS scaling FROM critic_lists 
                       GROUP BY critic_name), 
@@ -331,7 +352,7 @@ class SQLer:
                       '''),
               },
              {'name': 'chart_peaks',
-              'sql': (f'''
+              'sql': ('''
                       SELECT source_id, album_uri, peak_position FROM albums JOIN album_artists USING (source_id, album_uri) 
                       JOIN billboard ON 
                       (CASE WHEN album_artists.artist_names ~* '\s+(and|&|/)\s+' 
@@ -347,7 +368,7 @@ class SQLer:
                       '''),
               },
              {'name': 'album_stars',
-              'sql': (f'''
+              'sql': ('''
                       WITH critics_stars_expanded AS 
                       (SELECT album_name, jsonb_array_elements_text(artist_names) AS artist_name, 
                       stars FROM critic_stars) 
@@ -362,7 +383,7 @@ class SQLer:
             ]
     
     updates = [{'name': 'update_tracks',
-                'sql': (f'''
+                'sql': ('''
                         SELECT service_id, jsonb_array_elements_text(track_uris) AS track_uri FROM albums 
                         JOIN sources USING (source_id) 
                         EXCEPT SELECT service_id, track_uri FROM tracks WHERE 
@@ -371,7 +392,7 @@ class SQLer:
                         '''),
                 },
                {'name': 'update_recordings',
-                'sql': (f'''
+                'sql': ('''
                         SELECT isrc FROM albums JOIN sources USING (source_id) 
                         JOIN tracks ON sources.service_id = tracks.service_id AND albums.track_uris ? tracks.track_uri 
                         LEFT JOIN barcodes USING (upc) 
@@ -380,13 +401,13 @@ class SQLer:
                         '''),
                 },
                {'name': 'update_works',
-                'sql': (f'''
+                'sql': ('''
                         SELECT iswc FROM recordings WHERE iswc IS NOT NULL 
                         EXCEPT SELECT iswc FROM works 
                         '''),
                 },
                {'name': 'update_artists',
-                'sql': (f'''
+                'sql': ('''
                         SELECT service_id, jsonb_array_elements_text(artist_uris) AS artist_uri FROM tracks 
                         UNION SELECT service_id, jsonb_array_elements_text(artist_uris) AS artist_uri FROM albums 
                         JOIN sources USING (source_id) 
@@ -394,7 +415,7 @@ class SQLer:
                         '''),
                 },
                {'name': 'update_soundtracks',
-                'sql': (f'''
+                'sql': ('''
                         SELECT service_id, track_uri FROM tracks 
                         JOIN sources USING (service_id) 
                         JOIN albums ON sources.source_id = albums.source_id AND albums.track_uris ? tracks.track_uri 
@@ -406,14 +427,14 @@ class SQLer:
                         '''),
                 },
                {'name': 'update_upcs',
-                'sql': (f'''
+                'sql': ('''
                         SELECT source_id, album_uri, artist_names, album_name, release_date 
                         FROM albums JOIN album_artists USING (source_id, album_uri) 
                         WHERE upc IS NULL OR upc = 'false' AND album_type NOT IN ('single', 'playlist') 
                         '''),
                 },
                {'name': 'update_barcodes',
-                'sql': (f'''
+                'sql': ('''
                         WITH regex_soundtrack AS (SELECT '%(' || string_agg(phrase, '|') || ')%' 
                         AS soundtrack_words FROM keywords WHERE keyword = 'soundtrack'), 
                         
@@ -427,16 +448,32 @@ class SQLer:
                         JOIN album_artists USING (source_id, album_uri) 
                         '''),
                 },
+               {'name': 'update_lastfm',
+                'sql': ('''
+                        WITH non_analytics as 
+                        (SELECT source_id, album_uri FROM albums JOIN sources USING (source_id)
+                        WHERE album_type NOT IN ('single', 'ep', 'playlist')
+                        AND service_id NOT IN (SELECT service_id FROM services WHERE audio_analysis)
+                        AND (upc IS NULL OR upc NOT IN (SELECT upc FROM barcodes WHERE release_type IS NOT NULL))
+                        EXCEPT SELECT source_id, album_uri FROM lastfm
+                        WHERE release_type IS NOT NULL)
+                        
+                        SELECT source_id, album_uri, album_name, artist_names
+                        FROM non_analytics JOIN albums USING (source_id, album_uri)
+                        JOIN album_artists USING (source_id, album_uri)
+                        ''')}
               ]
     
     oprhans = [{'name': '_orphan_albums',
-                'sql': (f'''
+                'columns': ['source_id', 'album_uri'],
+                'sql': ('''
                         SELECT source_id, album_uri FROM albums 
                         EXCEPT SELECT source_id, album_uri FROM ownerships
                         '''),
                 },
                {'name': '_orphan_tracks',
-                'sql': (f'''
+                'columns': ['service_id', 'track_uri'],
+                'sql': ('''
                         SELECT service_id, track_uri FROM tracks
                         EXCEPT
                         SELECT service_id, jsonb_array_elements_text(track_uris) AS track_uri FROM albums
@@ -444,7 +481,8 @@ class SQLer:
                         '''),
                 },
                {'name': '_orphan_artists',
-                'sql': (f'''
+                'columns': ['service_id', 'artist_uri'],
+                'sql': ('''
                         SELECT service_id, artist_uri FROM artists
                         EXCEPT SELECT service_id, jsonb_array_elements_text(artist_uris) FROM tracks
                         EXCEPT SELECT source_id, jsonb_array_elements_text(artist_uris) FROM albums
@@ -452,20 +490,22 @@ class SQLer:
                         '''),
                 },
                {'name': '_ophan_barcodes',
-                'sql': (f'''
+                'columns': ['upc'],
+                'sql': ('''
                         SELECT upc FROM barcodes
                         EXCEPT SELECT upc FROM albums
                         '''),
                 },
                {'name': '_ophan_recordings',
-                'sql': (f'''
+                'columns': ['isrc'],
+                'sql': ('''
                         SELECT isrc FROM recordings
                         EXCEPT SELECT isrc FROM tracks
                         '''),
                 },
                {'name': '_ophan_works',
-                'sql': (f'''
-                        create or replace view  AS
+                'columns': ['iswc'],
+                'sql': ('''
                         SELECT iswc FROM works
                         EXCEPT SELECT iswc FROM recordings
                         '''),
@@ -473,7 +513,7 @@ class SQLer:
                ]
      
     materialized = [{'name': 'user_albums',
-                     'sql': (f'''
+                     'sql': ('''
                              SELECT first_name || ' ' || last_name AS user_name, 
                              artist_names, album_name, category, 
                              release_date, COALESCE(release_decades, jsonb_build_array(FLOOR(EXTRACT(YEAR FROM release_date) / 10) * 10)) AS release_decades, 
@@ -481,7 +521,7 @@ class SQLer:
                              track_list, COALESCE(play_duration, album_duration) AS play_duration, COALESCE(explicit, FALSE) AS explicit, 
                              service_name, source_name, 
                              user_id, service_id, source_id, album_uri 
-                             FROM ownerships JOIN sources USING (source_id) JOIN users USING (user_id) 
+                             FROM ownerships JOIN sources USING (source_id) JOIN profiles USING (user_id) 
                              JOIN services USING (service_id) JOIN albums USING (source_id, album_uri) 
                              JOIN album_artists USING (source_id, album_uri) JOIN album_categories USING (source_id, album_uri) 
                              LEFT JOIN release_battles USING (user_id, source_id, album_uri) 
@@ -489,42 +529,18 @@ class SQLer:
                              LEFT JOIN compilations USING (source_id, album_uri) 
                              LEFT JOIN chart_peaks USING (source_id, album_uri) 
                              LEFT JOIN album_stars USING (source_id, album_uri) 
+                             WHERE jsonb_array_length(track_list) > 0
                              '''),
                      },
                     ] 
     
     summary = {'name': '_remaining_updates'}
     
-    ''' basic DB functions '''
-    def create_primary_key(pk):
-        key = 'PRIMARY KEY (' + ', '.join(pk) + ')' if pk else ''
-        return key
-    
-    def create_foreign_key(fkt):
-        if fkt:
-            fk, t = fkt
-            if isinstance(fk, list):
-                fk1 = fk
-                fk2 = fk
-            elif isinstance(fk, dict):
-                fk1 = fk.keys()
-                fk2 = fk.values()
-            key = 'FOREIGN KEY (' + ', '.join(fk1) + f') REFERENCES {t} (' + ', '.join(fk2) + ')'
-        else:
-            key = ''
-        return key
-
     ''' table setup '''
     def create_tables():
         sqls = []
         for table in SQLer.tables:
-            cols_add = ', '.join(f'{c} {t}' for c, t in table['columns'])
-            pk_add = ', ' + SQLer.create_primary_key(table['pk']) if table.get('pk') else ''
-            fk_add = ', ' + ', '.join(SQLer.create_foreign_key([fk, t]) for fk, t in table['fks']) if table.get('fks') else ''
-            sql = (f'CREATE TABLE IF NOT EXISTS {table["name"]} '
-                   f'({cols_add} {pk_add} {fk_add})'
-                   f';'
-                   )
+            sql = f'CREATE TABLE IF NOT EXISTS {table["name"]} ({table["sql"]});'
             sqls.append(sql)
         return sqls
     
@@ -538,7 +554,7 @@ class SQLer:
     ''' view setup '''                    
     def create_views():
         sqls = []
-        for view in SQLer.views + SQLer.updates:
+        for view in SQLer.views + SQLer.updates + SQLer.oprhans:
             sql = f'CREATE OR REPLACE VIEW {view["name"]} AS {view["sql"]};'
             sqls.append(sql)
         return sqls

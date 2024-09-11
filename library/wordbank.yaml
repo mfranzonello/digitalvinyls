@@ -1,0 +1,52 @@
+remove_words:
+  albums:
+    parentheticals:
+      - remastered
+      - spotify exclusive
+      - anniversary edition
+      - special.*edition
+      - standard edition
+      - deluxe
+      - remaster
+      - deluxe
+      - deluxe edition
+      - deluxe version
+  soundtracks:
+    parentheticals:
+      - motion picture
+      - music from
+      - soundtrack
+  tracks:
+    parentheticals:
+      - remix
+      - mix
+      - version
+    hyphens:
+      - remaster
+      - sessions
+      - 7"
+      - 12"
+      - voice memo
+      - bonus track
+      - version
+      - edit
+      - instrumental
+      - mix
+      - live
+      - original
+      - clean
+      - demo
+      - bootleg
+      - from*soundtrack
+      - feat
+      - duet with
+      - hidden track
+      - stripped
+      - without rap
+
+keep_words:
+  tracks:
+    hyphens:
+      - intro
+      - outro
+      - interlude  

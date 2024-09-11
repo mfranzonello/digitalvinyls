@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Rank Albums</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .container {
+            width: 95%; /* To leave 2.5% padding on each side */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .album {
+            width: 45%; /* Each album takes up 45% of the container width */
+            text-align: center;
+        }
+        .album img {
+            width: 100%;
+            height: auto; /* Maintain aspect ratio */
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Which {{ category }} release do you like better?</h1>
+    </div>
+    <div class="container">
+        <div class="album">
+            <img src="{{ album1['image_src'] }}" alt="Album 1">
+            <p>"{{ album1['album_name'] }}" by {{ album1['artist_names'] | join(', ') }}</p>
+            <form method="POST">
+                <button type="submit" name="selected_album" value="{{ album1['album_name'] }}">Vote for this</button>
+            </form>
+        </div>
+        <div class="album">
+            <img src="{{ album2['image_src'] }}" alt="Album 2">
+            <p>"{{ album2['album_name'] }}" by {{ album2['artist_names'] | join(', ') }}</p>
+            <form method="POST">
+                <button type="submit" name="selected_album" value="{{ album2['album_name'] }}">Vote for this</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

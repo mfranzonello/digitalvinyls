@@ -52,6 +52,12 @@ class Texter:
             
         return text, captured
 
+    # # def remove_parentheticals(self, text, words):
+    # #     spaces = '(?:\s+\S*)?\s*'
+    # #     pattern = r'|'.join(rf'\{p[0]}{spaces}{word}{spaces}\{p[1]}' for p in ['()', '[]'] for word in words)
+
+    # #     pattern = r'\((?:\s+\S*)?\s*deluxe(?:\s+\S*)?\s*\)'
+
     def remove_parenthetical(self, text, words, position, parentheses=[['(', ')'], ['[', ']']],
                              middle=None, case_sensitive=False):
         captured = None

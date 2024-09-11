@@ -1,10 +1,10 @@
-''' Streaming music sources and libraries '''
+''' MusicBrainz API functions '''
 
 import requests
 
-from common.structure import MUSICBRAINZ_URL, MUSICBRAINZ_RATE_LIMIT, MUSICBRAINZ_QHAR_LIMIT
-from library.wordbank import RemoveWords
-from music.dsp import Service
+from ..common.structure import MUSICBRAINZ_URL, MUSICBRAINZ_RATE_LIMIT, MUSICBRAINZ_QHAR_LIMIT
+from ..library.wordbank import RemoveWords
+from .dsp import Service
      
 class MusicBrainer(Service):
     name = 'MusicBrainz'

@@ -1,4 +1,4 @@
-''' Streaming music sources and libraries '''
+''' SoundCloud API functions - pulls client_id from source '''
 
 from datetime import datetime
 import re
@@ -6,10 +6,10 @@ from collections import Counter
 
 import requests
 
-from common.secret import get_secret
-from common.structure import SOUNDCLOUD_PLAY_URL, SOUNDCLOUD_SEARCH_URL, SOUNDCLOUD_RATE_LIMIT, SOUNDCLOUD_QUERY_LIMIT
-from common.calling import KeyFinder
-from music.dsp import DSP
+from ..common.secret import get_secret
+from ..common.structure import SOUNDCLOUD_PLAY_URL, SOUNDCLOUD_SEARCH_URL, SOUNDCLOUD_RATE_LIMIT, SOUNDCLOUD_QUERY_LIMIT
+from ..common.calling import KeyFinder
+from .dsp import DSP
 
 class Sounder(DSP):
     name = 'SoundCloud'
@@ -79,7 +79,7 @@ class Sounder(DSP):
                     playlists = [c for c in collection if c['is_album'] and c['track_count']] ## > min_track_count
                     found_playlists.append(collection)
 
-                    album_names = [p['title'] for p in playlists]
+                    album_names = [self.extract_name_from_title(p['title'], self.get_user_artist_name(p['user']))[0] for p in playlists]
                     self.add_text(' | '.join(album_names))
                 
                     like_dates = [p['created_at'] for p in playlists]
@@ -89,7 +89,7 @@ class Sounder(DSP):
                     release_dates = [datetime.strptime(r, '%Y-%m-%dT%H:%M:%SZ') for r in r_dates]
                     release_types = [p['set_type'] for p in playlists]
                     track_uris = [[t['id'] for t in p['tracks']] for p in playlists]
-                    barcodes = [False] * len(playlists)
+                    ##barcodes = [False] * len(playlists)
 
                     artist_names = []
                     artist_uris = []
@@ -107,7 +107,7 @@ class Sounder(DSP):
                     info__albums['image_src'] = image_srcs
                     info__albums['artist_uris'] = artist_uris
                     info__albums['track_uris'] = track_uris
-                    info__albums['upc'] = barcodes
+                    ##info__albums['upc'] = barcodes
                     info__albums['album_duration'] = durations
                 
                     info__artists = {}
@@ -168,7 +168,7 @@ class Sounder(DSP):
                 playlist_likes = [c for c in found_playlist_likes if c['playlist']['track_count']]
                 playlists = [l['playlist'] for l in playlist_likes]
                 
-                album_names = [p['title'] for p in playlists]
+                album_names = [self.extract_name_from_title(p['title'], self.get_user_artist_name(p['user']))[0] for p in playlists]
                 self.add_text(' | '.join(album_names))
 
                 like_dates = [l['created_at'] for l in playlist_likes]
@@ -181,7 +181,7 @@ class Sounder(DSP):
                 artist_uris = [[]]
                 artist_names = [[]]
                 durations = [p['duration']/(1000*60) for p in playlists]
-                barcodes = [False] * len(playlists)
+                ##barcodes = [False] * len(playlists)
             
 
                 info__albums = {}
@@ -192,7 +192,7 @@ class Sounder(DSP):
                 info__albums['image_src'] = [] # fill in from tracks
                 info__albums['artist_uris'] = [] # fill in from tracks
                 info__albums['track_uris'] = [] # fill in from tracks
-                info__albums['upc'] = barcodes
+                ##info__albums['upc'] = barcodes
                 info__albums['album_duration'] = durations
                 
                 info__ownerships = {}
@@ -335,7 +335,7 @@ class Sounder(DSP):
                 )
 
     def get_user_artist_name(self, user):
-        artist_name = user['full_name'] if user['full_name'] else user['username']
+        artist_name = user['username'] #user['full_name'] if user['full_name'] else user['username']
         return artist_name
 
     def find_true_artist(self, artist_name):

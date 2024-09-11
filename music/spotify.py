@@ -1,4 +1,4 @@
-''' Streaming music sources and libraries '''
+''' Spotify API functions - requires dev keys + user auth '''
 
 from math import ceil
 from datetime import datetime
@@ -12,17 +12,16 @@ from spotipy import Spotify, SpotifyClientCredentials
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import MemoryCacheHandler
 
-from common.secret import get_secret, get_token
-from common.structure import (SPOTIFY_AUTH_URL, SPOTIFY_LOGIN_URL, SPOTIFY_TOKENS_FOLDER,
+from ..common.secret import get_secret, get_token
+from ..common.structure import (SPOTIFY_AUTH_URL, SPOTIFY_TOKENS_FOLDER,
                               SPOTIFY_REDIRECT_URI, SPOTIFY_SCOPE, SPOTIFY_PLAYLIST_WORD,
                               SPOTIFY_RATE_LIMIT, SPOTIFY_QUERY_LIMIT)
-from music.dsp import DSP
+from .dsp import DSP
 
 class Spotter(DSP):
     name = 'Spotify'
     
     auth_url = SPOTIFY_AUTH_URL
-    login_url = SPOTIFY_LOGIN_URL
     api_rate_limit = SPOTIFY_RATE_LIMIT
     api_query_limit = SPOTIFY_QUERY_LIMIT
         
@@ -99,7 +98,7 @@ class Spotter(DSP):
         
         self.show_progress(offset, total)
         while total is None or offset < total:
-            results = self.sp.current_user_saved_albums(limit=50, offset=offset)
+            results = self.sp.current_user_saved_albums(limit=20, offset=offset)
             self.sleep()
             
             total = results['total']
@@ -107,11 +106,12 @@ class Spotter(DSP):
             
             info__albums = {}
             info__albums['artist_uris'] = [[artist['id'] for artist in item['album']['artists']] for item in items]
-            info__albums['album_uri'] = [item['album']['id'] for item in items]
+            album_uris = [item['album']['id'] for item in items]
+            info__albums['album_uri'] = album_uris
             info__albums['album_name'] = [item['album']['name'] for item in items]
             info__albums['image_src'] = [item['album']['images'][0]['url'] for item in items]
             info__albums['album_type'] = [item['album']['album_type'] for item in items]
-            info__albums['track_uris'] = [[track['id'] for track in item['album']['tracks']['items']] for item in items]
+            ##info__albums['track_uris'] = [[track['id'] for track in item['album']['tracks']['items']] for item in items]
             info__albums['album_duration'] = [sum(round(track['duration_ms']/(1000*60), 4) for track in item['album']['tracks']['items']) \
                                        for item in items]
             info__albums['upc'] = [item['album']['external_ids']['upc'] for item in items]
@@ -126,22 +126,25 @@ class Spotter(DSP):
             info__ownerships['album_uri'] = info__albums['album_uri']
             info__ownerships['like_date'] = [item['added_at'] for item in items]
 
-            info_albums, info_artists, info_ownerships = \
-                self.combine_infos([info_albums, info_artists, info_ownerships],
-                                   [info__albums, info__artists, info__ownerships])
+            # find availability is only working with the album pulls, not with the user likes pull
+            results = self.sp.albums(album_uris)
+            self.sleep()
+            albums = results['albums']
+            info__albums['track_uris'] = [[track['id'] for track in album['tracks']['items'] if not track.get('restrictions')] for album in albums]
                                                                         
             offset += len(items)
             self.show_progress(offset, total)
 
+            info_albums, info_artists, info_ownerships = \
+                self.combine_infos([info_albums, info_artists, info_ownerships],
+                                   [info__albums, info__artists, info__ownerships])        
+        
         albums_df = self.get_df_from_info(info_albums, subset=['album_uri'])
         artists_df = self.get_df_from_info(info_artists, subset=['artist_uri'])
         ownerships_df = self.get_df_from_info(info_ownerships, subset=['album_uri'])
 
         return albums_df, artists_df, ownerships_df
-    
-    # # def get_albums_info(self):
-    # #     return albums_df, artists_df, ownerships_df
-    
+   
     ''' extract saved playlists '''
     def get_playlists(self):
         albums_df, artists_df, ownerships_df = self.get_playlists_data()

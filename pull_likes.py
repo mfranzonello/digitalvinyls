@@ -1,7 +1,7 @@
 ''' Get data to build library '''
 
-from setup import set_up_database, set_up_user, is_updatable
-from music.services import UserServices
+from .setup import set_up_database, set_up_user, is_updatable
+from .music.services import UserServices
 
 def update_albums(neon, DSPs, user):
     for S in DSPs:

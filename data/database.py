@@ -10,9 +10,9 @@ from pandas import read_sql, isna
 from numpy import integer, floating
 from sqlalchemy import create_engine, text
 
-from common.secret import get_secret
-from common.structure import NEON_DB_NAME, NEON_USERNAME, NEON_HOST
-from data.sqls import SQLer
+from ..common.secret import get_secret
+from ..common.structure import NEON_DB_NAME, NEON_USERNAME, NEON_HOST
+from .sqls import SQLer
 
 class Neon:
     reset_time = 120
@@ -153,7 +153,7 @@ class Neon:
         
     def add_user(self, first_name, last_name, image_src=None):
         sql = (f'''
-               INSERT INTO users (first_name, last_name, image_src) 
+               INSERT INTO profiles (first_name, last_name, image_src) 
                VALUES ({first_name}, {last_name}, {image_src}) 
                RETURNING user_id
                ;
@@ -168,7 +168,7 @@ class Neon:
         if service_user_ids:
             set_attributes.append(f'service_user_ids = service_user_ids || {self.dbify(service_user_ids)}')
         sets = ', '.join(set_attributes)
-        sql = f'UPDATE users SET {sets} WHERE user_id = {user_id};'
+        sql = f'UPDATE profiles SET {sets} WHERE user_id = {user_id};'
         self.execute(sql)
 
     ''' update data from pull '''
@@ -221,6 +221,7 @@ class Neon:
         self.execute(sql)
         
     def set_update_column(self, column, alias, comparison='='):
+        ## need somethign for when it already exists, don't update a particular column
         match comparison:
             case '=':
                 update = f'{alias}.{column}'
@@ -311,6 +312,20 @@ class Neon:
     # #     self.execute(sql)
 
 
+    ''' remove albums and details no longer needed '''
+    def remove_items(self, table_name, columns):
+        wheres = ', '.join(columns)
+        sql = (f'''
+               DELETE FROM {table_name} WHERE ({wheres}) IN 
+               (SELECT {wheres} IN _ophran_{table_name})
+               ''')
+        self.execute(sql)
+        
+    def remove_orphans(self):
+        for table in SQLer.orphans:
+            self.remove_items(table['name'][len('_orphan_'):], table['columns'])
+            
+
     ''' manual changes '''       
     def update_album_rating(self, user_id, source_id, album_uri, rating):
         # need to ensure that rankings are adjusted -- can't have a B+ album above an A-
@@ -370,7 +385,7 @@ class Neon:
                picks AS (SELECT source_id, album_uri, category FROM first_pick 
                UNION SELECT source_id, album_uri, category FROM second_pick)  
 
-               SELECT user_id, source_id, album_uri, category, album_name, artist_names, ranking 
+               SELECT user_id, source_id, album_uri, category, album_name, artist_names, ranking, image_src 
                FROM picks JOIN albums USING (source_id, album_uri) 
                JOIN ownerships USING (source_id, album_uri) JOIN sources USING (source_id) 
                JOIN album_artists USING (source_id, album_uri) 
@@ -537,13 +552,13 @@ class Neon:
         return excludes
 
     def get_user_ids(self):
-        sql = (f'SELECT user_id FROM users;')
+        sql = (f'SELECT user_id FROM profiles;')
         user_ids = self.read_sql(sql)['user_id'].to_list()
         return user_ids
     
     def get_user(self, user_id):
         sql = (f'''
-               SELECT * FROM users 
+               SELECT * FROM profiles 
                WHERE user_id = {self.dbify(user_id)}
                ;
                ''')
@@ -551,7 +566,7 @@ class Neon:
         return user_s
     
     def get_users(self):
-        sql = ('SELECT * FROM users;')
+        sql = ('SELECT * FROM profiles;')
         users_df = self.read_sql(sql)
         return users_df
    

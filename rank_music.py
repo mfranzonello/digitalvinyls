@@ -1,7 +1,7 @@
 ''' Rank and rate albums '''
 
-from setup import set_up_database, set_up_users
-from music.listeners import Ranker
+from .setup import set_up_database, set_up_users
+from .music.listeners import Ranker
 
 def rank_music(neon):
     users = set_up_users(neon)

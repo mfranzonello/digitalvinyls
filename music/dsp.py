@@ -4,8 +4,8 @@ from time import sleep
 
 from pandas import DataFrame
 
-from common.calling import Caller, Printer
-from common.words import Texter
+from ..common.calling import Caller, Printer
+from ..common.words import Texter
 #from common.structure import
 #from library.wordbank import RemoveWords
 ##from library.something import Something

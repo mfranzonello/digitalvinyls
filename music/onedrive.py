@@ -1,4 +1,4 @@
-''' Streaming music sources and libraries '''
+''' OneDrive API functions - requires dev keys + user auth '''
 
 from datetime import datetime
 import statistics
@@ -7,10 +7,10 @@ from urllib import parse
 
 import requests
 
-from common.secret import get_secret, get_token
-from common.structure import (AZURE_LOGIN_URL, AZURE_GRAPH_URL, AZURE_TOKENS_FOLDER,
-                              AZURE_SCOPE, AZURE_VINYLS_FOLDER, AZURE_RATE_LIMIT)
-from music.dsp import DSP
+from ..common.secret import get_secret, get_token
+from ..common.structure import (AZURE_LOGIN_URL, AZURE_GRAPH_URL, AZURE_TOKENS_FOLDER,
+                                AZURE_SCOPE, AZURE_VINYLS_FOLDER, AZURE_RATE_LIMIT)
+from .dsp import DSP
 
 class Driver(DSP):
     name = 'OneDrive'

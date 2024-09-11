@@ -5,8 +5,9 @@ from io import BytesIO
 from google.oauth2.service_account import Credentials as SACredentials
 from google.cloud.storage import Client
 
-from common.secret import get_secret
-from common.structure import GCP_TOKEN_URI, GCP_AUTH_URL, GCP_APIS_URL, GCP_S_PROJECT_ID, GCP_S_ACCOUNT_NAME, GCP_S_BUCKET_NAME
+from . import gcp_auth
+from ..common.secret import get_secret
+from ..common.structure import GCP_TOKEN_URI, GCP_AUTH_URL, GCP_APIS_URL, GCP_S_PROJECT_ID, GCP_S_ACCOUNT_NAME, GCP_S_BUCKET_NAME
 
 
 class GClouder:

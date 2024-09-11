@@ -1,4 +1,4 @@
-''' Personal account variables '''
+''' Project specific variables from YAML files '''
 
 import json
 import yaml
@@ -32,16 +32,17 @@ _csvs_folder = 'csvs'
 _config = read_yaml(_config_folder, 'config')
 _api = read_yaml(_config_folder, 'api')
     
+PROFILES_FOLDER = f'{_auths_folder}/app'
+
 # LOCATIONS:
 GITHUB_URL = _api['github']['urls']['env']
 
-SPOTIFY_PLAY_URL = _api['spotify']['urls']['play']
 SPOTIFY_AUTH_URL = _api['spotify']['urls']['auth']
-SPOTIFY_LOGIN_URL = _api['spotify']['urls']['login']
+SPOTIFY_SEARCH_URL = _api['spotify']['urls']['search']
 
 MUSICBRAINZ_URL = _api['musicbrainz']['urls']['search']
 
-SONOS_LOGIN_URL = _api['sonos']['urls']['login']
+SONOS_AUTH_URL = _api['sonos']['urls']['auth']
 SONOS_CONTROL_URL = _api['sonos']['urls']['control']
 
 SOUNDCLOUD_PLAY_URL = _api['soundcloud']['urls']['play']
@@ -49,6 +50,8 @@ SOUNDCLOUD_SEARCH_URL = _api['soundcloud']['urls']['search']
 
 AZURE_LOGIN_URL = _api['azure']['urls']['login']
 AZURE_GRAPH_URL = _api['azure']['urls']['graph']
+
+LAST_FM_SEARCH_URL = _api['lastfm']['urls']['search']
 
 GCP_AUTH_URL = _api['gcp']['urls']['auth']
 GCP_APIS_URL = _api['gcp']['urls']['apis']
@@ -69,12 +72,15 @@ MUSICBRAINZ_QHAR_LIMIT = _api['musicbrainz']['limits']['qhar']
 
 BILLBOARD_RATE_LIMIT = _api['billboard']['limits']['rate']
 
+LAST_FM_RATE_LIMIT = _api['billboard']['limits']['rate']
+
 
 # VALUES
 SPOTIFY_TOKENS_FOLDER = f'{_tokens_folder}/spotify'
 SONOS_TOKENS_FOLDER = f'{_tokens_folder}/sonos'
 AZURE_TOKENS_FOLDER = f'{_tokens_folder}/azure'
 SOUNDCLOUD_TOKENS_FOLDER = f'{_tokens_folder}/soundcloud'
+YOUTUBE_TOKENS_FOLDER = f'{_tokens_folder}/youtube'
 
 CRITICS_FOLDER = f'{_csvs_folder}/critics'
 
@@ -83,6 +89,7 @@ SPOTIFY_SCOPE = _config['spotify']['scope']
 SPOTIFY_PLAYLIST_WORD = _config['spotify']['vinyl_playlist_word']
 
 SONOS_REDIRECT_URI = _config['sonos']['redirect_uri']
+SONOS_SCOPE = _config['sonos']['scope']
 SONOS_HOST = _config['sonos']['host']
 SONOS_PORT = _config['sonos']['port']
 
@@ -98,3 +105,6 @@ AZURE_VINYLS_FOLDER = _config['azure']['vinyl_folder_path']
 GCP_S_PROJECT_ID = _config['gcp']['project_id']
 GCP_S_ACCOUNT_NAME = _config['gcp']['account_name']
 GCP_S_BUCKET_NAME = _config['gcp']['bucket_name']
+
+YOUTUBE_REDIRECT_URI = _config['youtube']['redirect_uri']
+YOUTUBE_SCOPE = _config['youtube']['scope']

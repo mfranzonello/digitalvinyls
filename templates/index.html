@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Home</title>
+</head>
+<body>
+    <h1>{{ message }}</h1>
+    {% if not session.user %}
+    <a href="{{ url_for('login') }}">Sign In</a>
+    <a href="{{ url_for('register') }}">Register</a>
+    {% else %}
+    <a href="{{ url_for('profiles')  }}">Profiles</a>
+    <a href="{{ url_for('logout') }}">Sign Out</a>
+    {% endif %}
+</body>
+</html>

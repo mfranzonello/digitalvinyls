@@ -1,7 +1,7 @@
 ''' Ensure database and listener are good to go '''
 
-from data.database import Neon
-from music.listeners import User
+from .data.database import Neon
+from .music.listeners import User
 
 def set_up_database(drop_tables=False, drop_views=False, create_tables=False, create_views=False, materialize=False):
     neon = Neon()

@@ -10,7 +10,7 @@ from random import randint
 import requests
 from bs4 import BeautifulSoup
 
-from common.words import Colors
+from .words import Colors
 
 class NoResponse:
     def __init__(self):

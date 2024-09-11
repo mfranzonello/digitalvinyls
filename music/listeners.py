@@ -2,9 +2,9 @@
 
 from pandas import isna
 
-from common.words import Texter, Colors
-from common.entry import Stroker
-from library.wordbank import RemoveWords
+from ..common.words import Texter, Colors
+from ..common.entry import Stroker
+from ..library.wordbank import RemoveWords
 
 class User:
     def __init__(self, user_id, first_name, last_name):

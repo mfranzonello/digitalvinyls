@@ -1,12 +1,12 @@
-''' Streaming music sources and libraries '''
+''' Industry CSV functions '''
 
 import os
 from glob import glob
 
 from pandas import DataFrame, read_csv, concat
 
-from common.structure import CRITICS_FOLDER 
-from music.dsp import Service
+from ..common.structure import CRITICS_FOLDER 
+from .dsp import Service
 
 class Critic(Service):
     name = 'Best Albums Rankings'

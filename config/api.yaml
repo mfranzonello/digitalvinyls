@@ -6,14 +6,14 @@ spotify:
   urls:
     play: 'https://open.spotify.com'
     auth: 'https://accounts.spotify.com'
-    login: 'https://accounts.spotify.com/api'
+    search: 'https://api.spotify.com/v1'
   limits:
     rate: 3
     query: 50
 
 sonos:
   urls:
-    login: 'https://api.sonos.com/login/v3'
+    auth: 'https://api.sonos.com/login/v3'
     control: 'https://api.ws.sonos.com/control/api/v1'
     
 soundcloud:
@@ -48,3 +48,15 @@ gcp:
     auth: 'https://accounts.google.com'
     apis: 'https://www.googleapis.com'
     token: 'https://oauth2.googleapis.com/token'
+
+lastfm:
+  urls:
+    search: 'https://ws.audioscrobbler.com/2.0'
+  limits:
+    rate: 1  
+
+youtube:
+  urls:
+    auth: 'https://accounts.google.com/o/oauth2/auth'
+    token: 'https://oauth2.googleapis.com/token'
+    cert: 'https://www.googleapis.com/oauth2/v1/certs'
